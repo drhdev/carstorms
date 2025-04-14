@@ -135,19 +135,6 @@ For example:
 
 ---
 
-## 📬 Alerts (optional)
-
-You can integrate Telegram, email, or push services to notify when storms approach your locations.  
-(Feature not included by default – contact or fork to add.)
-
----
-
-## 🤝 Contributing
-
-PRs welcome! Suggestions, bug reports, and ideas are appreciated.
-
----
-
 ## 📄 License
 
 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) – Free as in freedom.
