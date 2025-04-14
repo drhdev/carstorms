@@ -7,7 +7,7 @@ A python script to get data about tropical storms and hurricanes from NHC on sto
 `carstorms.py` is a lightweight Python script that fetches and analyzes active tropical storms and hurricanes from the [NOAA National Hurricane Center (NHC)](https://www.nhc.noaa.gov/). It checks if any dangerous systems may affect user-defined locations (e.g., St. John USVI or St. Barths), calculates the closest approach time, and classifies the storm's severity.
 
 This tool is designed for:
-- small VPS servers (1 GB RAM, 1 CPU)
+- small VPS servers 
 - integration into monitoring workflows
 - generating a structured `carstorms.json` output file
 - use as a backend data source for dashboards, APIs, or alerts
