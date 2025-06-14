@@ -63,14 +63,12 @@ Example `carstorms.json` output:
 ### Requirements
 
 - Python 3.7+
-- Packages:
-  - `requests`
-  - `geopy`
+- requirements.txt
 
 You can install requirements via pip:
 
 ```bash
-pip install requests geopy
+pip install requirements.txt
 ```
 
 ### Clone the repository
