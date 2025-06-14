@@ -4,5 +4,6 @@
   "locations": {
     "St. John (USVI)": [18.33, -64.73],
     "St. Barths": [17.9, -62.83]
-  }
+  },
+  "webhook_url": "https://your-n8n-webhook-url"
 }

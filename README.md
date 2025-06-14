@@ -76,7 +76,7 @@ pip install requests geopy
 ### Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/carstorms.git
+git clone https://github.com/drhdev/carstorms.git
 cd carstorms
 ```
 
@@ -95,9 +95,23 @@ Example:
   "locations": {
     "St. John (USVI)": [18.33, -64.73],
     "St. Barths": [17.9, -62.83]
-  }
+  },
+  "webhook_url": "https://your-n8n-webhook-url"
 }
 ```
+
+- `alert_radius_km`: Alert radius in kilometers for proximity checks.
+- `wind_threshold_kt`: Minimum wind speed (knots) to consider a storm dangerous.
+- `locations`: Dictionary of monitored locations (name: [lat, lon]).
+- `webhook_url`: (Optional) If set, the script will POST the output JSON to this URL after each run. This is ideal for integration with automation tools like n8n.
+
+### 🌐 Webhook Integration (n8n Example)
+
+To receive alerts in [n8n](https://n8n.io/):
+1. Create a Webhook node in n8n.
+2. Set the HTTP Method to **POST**.
+3. Copy the webhook URL and paste it as `webhook_url` in your `carstorms.config`.
+4. The script will POST the full output JSON to this webhook after each run.
 
 ### 🌍 Global mode
 
@@ -123,14 +137,71 @@ This updates:
 
 ---
 
-## 🔄 Automate it
+## 🔄 Automate with Cron & Virtual Environment (Recommended for Ubuntu/Linux)
 
-You can set up a cronjob or systemd timer to run this script periodically (e.g., hourly).  
-For example:
+### 1. Set up a Python virtual environment in your project directory
 
 ```bash
-0 * * * * /usr/bin/python3 /path/to/carstorms.py
+cd ~/python/carstorms
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
+
+- This creates and activates a virtual environment in `~/python/carstorms/venv`.
+- Install dependencies inside the venv for isolation and portability.
+
+### 2. Run the script manually using the venv
+
+```bash
+cd ~/python/carstorms
+source venv/bin/activate
+venv/bin/python carstorms.py
+```
+
+### 3. Run the test suite using the venv
+
+```bash
+cd ~/python/carstorms
+source venv/bin/activate
+venv/bin/python -m unittest test_carstorms.py -v
+```
+
+### 4. Set up a cron job to run the script every hour at 7 minutes past the hour
+
+Edit your crontab:
+
+```bash
+crontab -e
+```
+
+Add this line:
+
+```cron
+7 * * * * cd "$HOME/python/carstorms" && ./venv/bin/python carstorms.py >> carstorms_cron.log 2>&1
+```
+
+- This will run the script at 7 minutes past every hour.
+- All dependencies and the script will use the virtual environment.
+- Output and errors will be appended to `carstorms_cron.log` in the project directory.
+
+---
+
+## 🧪 Testing & Simulation
+
+You can run the test suite to:
+- Validate all core logic and config loading.
+- Simulate a hurricane scenario and see the output structure.
+- Ensure the script works with your real `carstorms.config` (all tests use the real config).
+
+To run all tests:
+
+```bash
+python3 -m unittest test_carstorms.py -v
+```
+
+- The test suite will simulate a hurricane and show the output JSON as it would be sent to your webhook.
+- You can use this to verify your config, webhook integration, and output format.
 
 ---
 
