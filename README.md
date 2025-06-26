@@ -2,7 +2,7 @@
 
 A python script to get data about tropical storms and hurricanes from NHC on storms in the Caribbean.
 
-## 🌪️ Overview
+## Overview
 
 `carstorms.py` is a lightweight Python script that fetches and analyzes active tropical storms and hurricanes from the [NOAA National Hurricane Center (NHC)](https://www.nhc.noaa.gov/). It checks if any dangerous systems may affect user-defined locations (e.g., St. John USVI or St. Barths), calculates the closest approach time, and classifies the storm's severity.
 
@@ -12,7 +12,7 @@ This tool is designed for:
 - generating a structured `carstorms.json` output file
 - use as a backend data source for dashboards, APIs, or alerts
 
-## 📦 Features
+## Features
 
 - Parses NOAA's live `nhc.kmz` feed
 - Filters storms based on wind threshold and proximity
@@ -22,7 +22,7 @@ This tool is designed for:
 - Writes structured JSON and rotating logs
 - Resource-efficient and fast
 
-## 📁 Output
+## Output
 
 The script generates:
 - `carstorms.json` – JSON file with storm information
@@ -58,17 +58,19 @@ Example `carstorms.json` output:
 
 ---
 
-## 🛠️ Installation
+## Installation
 
 ### Requirements
 
 - Python 3.7+
-- requirements.txt
+- Packages:
+  - `requests`
+  - `geopy`
 
 You can install requirements via pip:
 
 ```bash
-pip install requirements.txt
+pip install requests geopy
 ```
 
 ### Clone the repository
@@ -80,7 +82,7 @@ cd carstorms
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 All settings are defined in a single JSON file: `carstorms.config`
 
@@ -103,7 +105,7 @@ Example:
 - `locations`: Dictionary of monitored locations (name: [lat, lon]).
 - `webhook_url`: (Optional) If set, the script will POST the output JSON to this URL after each run. This is ideal for integration with automation tools like n8n.
 
-### 🌐 Webhook Integration (n8n Example)
+### Webhook Integration (n8n Example)
 
 To receive alerts in [n8n](https://n8n.io/):
 1. Create a Webhook node in n8n.
@@ -111,7 +113,7 @@ To receive alerts in [n8n](https://n8n.io/):
 3. Copy the webhook URL and paste it as `webhook_url` in your `carstorms.config`.
 4. The script will POST the full output JSON to this webhook after each run.
 
-### 🌍 Global mode
+### Global mode
 
 To track **all active systems globally**, remove or leave `"locations"` empty:
 
@@ -121,7 +123,7 @@ To track **all active systems globally**, remove or leave `"locations"` empty:
 
 ---
 
-## 🚀 Usage
+## Usage
 
 Run manually:
 
@@ -135,7 +137,7 @@ This updates:
 
 ---
 
-## 🔄 Automate with Cron & Virtual Environment (Recommended for Ubuntu/Linux)
+## Automate with Cron & Virtual Environment (Recommended for Ubuntu/Linux)
 
 ### 1. Set up a Python virtual environment in your project directory
 
@@ -173,11 +175,10 @@ Edit your crontab:
 crontab -e
 ```
 
-Add this line:
+Add this line and change user to your username:
 
 ```cron
-7 * * * * cd "$HOME/python/carstorms" && ./venv/bin/python carstorms.py >> carstorms_cron.log 2>&1
-```
+7 * * * * /home/user/python/carstorms/venv/bin/python /home/user/python/carstorms/carstorms.py >> /home/user/python/carstorms/carstorms_cron.log 2>&1```
 
 - This will run the script at 7 minutes past every hour.
 - All dependencies and the script will use the virtual environment.
@@ -185,7 +186,7 @@ Add this line:
 
 ---
 
-## 🧪 Testing & Simulation
+## Testing & Simulation
 
 You can run the test suite to:
 - Validate all core logic and config loading.
@@ -206,3 +207,4 @@ python3 -m unittest test_carstorms.py -v
 ## 📄 License
 
 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) – Free as in freedom.
+"""

@@ -2,11 +2,11 @@
 # ----------------------------------------
 # Script Name: carstorms.py
 # Developer: drhdev
-# Version: 0.5.1
+# Version: 0.6
 # License: GPLv3
 #
 # Description:
-# This script fetches active tropical storms and hurricanes from the NOAA National Hurricane Center /https://www.nhc.noaa.gov/),
+# This script fetches active tropical storms and hurricanes from the NOAA National Hurricane Center (https://www.nhc.noaa.gov/),
 # analyzes forecast track data, and determines if the configured locations may be affected.
 # It loads settings and monitored locations from carstorms.config (JSON).
 # ----------------------------------------
@@ -19,15 +19,61 @@ from io import BytesIO
 from geopy.distance import geodesic
 from datetime import datetime, timedelta, timezone
 import logging
+import os
 import sys
 import traceback
+
+# ----------------------------------------
+# Paths
+# ----------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "carstorms.config")
+LOG_FILE = os.path.join(BASE_DIR, "carstorms.log")
+OUTPUT_JSON = os.path.join(BASE_DIR, "carstorms.json")
+DEBUG_FILE = "/tmp/carstorms_debug.txt"
+
+# ----------------------------------------
+# Constants
+# ----------------------------------------
+
+NHC_KMZ_URL = "https://www.nhc.noaa.gov/gis/kml/nhc.kmz"
+
+CATEGORY_SCALE = [
+    (252, "Category 5 of 5: Catastrophic – Most buildings destroyed, area uninhabitable."),
+    (209, "Category 4 of 5: Very severe – Long power/water outages, major destruction."),
+    (178, "Category 3 of 5: Severe – Widespread damage, long outages."),
+    (154, "Category 2 of 5: Moderate – Large trees uprooted, major roof damage."),
+    (119, "Category 1 of 5: Weak – Roof and tree damage, power outages likely."),
+    (63,  "Tropical Storm – Strong wind, high seas, possible flooding.")
+]
+
+# ----------------------------------------
+# Logging Setup
+# ----------------------------------------
+
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    filemode='w'
+)
+
+# Zusätzlich zur Konsole loggen
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logging.getLogger().addHandler(console_handler)
+
+logger = logging.getLogger("carstorms")
 
 # ----------------------------------------
 # Load configuration from JSON
 # ----------------------------------------
 
-def load_config(config_path="carstorms.config"):
+def load_config(config_path=CONFIG_FILE):
     try:
+        logger.info(f"Loading config from {config_path}")
         with open(config_path, "r", encoding="utf-8") as f:
             config_data = json.load(f)
 
@@ -58,39 +104,6 @@ def load_config(config_path="carstorms.config"):
         raise RuntimeError(f"Failed to load config: {e}")
 
 # ----------------------------------------
-# Load values from config
-# ----------------------------------------
-
-# ALERT_RADIUS_KM, WIND_THRESHOLD_KT, LOCATIONS = load_config()
-
-LOG_FILE = "carstorms.log"
-OUTPUT_JSON = "carstorms.json"
-NHC_KMZ_URL = "https://www.nhc.noaa.gov/gis/kml/nhc.kmz"
-
-CATEGORY_SCALE = [
-    (252, "Category 5 of 5: Catastrophic – Most buildings destroyed, area uninhabitable."),
-    (209, "Category 4 of 5: Very severe – Long power/water outages, major destruction."),
-    (178, "Category 3 of 5: Severe – Widespread damage, long outages."),
-    (154, "Category 2 of 5: Moderate – Large trees uprooted, major roof damage."),
-    (119, "Category 1 of 5: Weak – Roof and tree damage, power outages likely."),
-    (63,  "Tropical Storm – Strong wind, high seas, possible flooding.")
-]
-
-# ----------------------------------------
-# Logging
-# ----------------------------------------
-
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    filemode='w'
-)
-
-logger = logging.getLogger("carstorms")
-
-# ----------------------------------------
 # Helper Functions
 # ----------------------------------------
 
@@ -118,7 +131,6 @@ def fetch_active_storms_kml():
         return None
 
 def analyze_proximity(coords, times, locations, alert_radius_km):
-    # Truncate coords and times to the shortest length to avoid mismatches
     min_len = min(len(coords), len(times))
     coords = coords[:min_len]
     times = times[:min_len]
@@ -145,24 +157,28 @@ def analyze_proximity(coords, times, locations, alert_radius_km):
 # ----------------------------------------
 
 def main(config=None):
+    try:
+        with open(DEBUG_FILE, "a") as f:
+            f.write(f"Started at: {datetime.now().isoformat()}\n")
+    except Exception:
+        pass
+
+    logging.info(f"Script started. Current working directory: {os.getcwd()}")
+    
     if config is None:
         result = load_config()
-        if len(result) == 4:
-            alert_radius_km, wind_threshold_kt, locations, webhook_url = result
-        else:
-            alert_radius_km, wind_threshold_kt, locations = result
-            webhook_url = None
+        alert_radius_km, wind_threshold_kt, locations, webhook_url = result
     else:
         alert_radius_km = int(config.get("alert_radius_km", 150))
         wind_threshold_kt = int(config.get("wind_threshold_kt", 60))
         locations = config.get("locations", {})
         locations = {k: tuple(v) for k, v in locations.items()}
         webhook_url = config.get("webhook_url")
-    logging.info(f"Script started with config: alert_radius_km={alert_radius_km}, wind_threshold_kt={wind_threshold_kt}, locations={locations}, webhook_url={webhook_url}")
+    logging.info(f"Using config: radius={alert_radius_km}, wind_threshold={wind_threshold_kt}, locations={locations.keys()}, webhook={webhook_url}")
 
     output = {
         "name": "carstorms.py",
-        "description": "Checks active tropical storms and hurricanes from NOAA and evaluates whether defined locations may be affected. Includes forecast proximity, strength, and category explanations.",
+        "description": "Checks active tropical storms and hurricanes from NOAA and evaluates whether defined locations may be affected.",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "status": "ok",
         "message": "No active dangerous storms near monitored locations.",
@@ -175,11 +191,11 @@ def main(config=None):
     if not kml_root:
         output["status"] = "error"
         output["message"] = "Failed to fetch or parse active storm data."
-        logging.error("Failed to fetch or parse active storm data.")
+        logging.error(output["message"])
     else:
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
         placemarks = kml_root.findall('.//kml:Placemark', ns)
-        logging.info(f"Found {len(placemarks)} placemarks (potential storms) in KML.")
+        logging.info(f"Found {len(placemarks)} potential storm entries.")
         for placemark in placemarks:
             try:
                 name_tag = placemark.find('kml:name', ns)
@@ -206,12 +222,10 @@ def main(config=None):
                 try:
                     coord_strings = coord_text.text.strip().split()
                     coords = [tuple(map(float, c.split(',')[:2])) for c in coord_strings]
-                    min_len = min(len(coords), len(times))
-                    coords = coords[:min_len]
-                    times = times[:min_len]
+                    coords = coords[:len(times)]
                 except Exception as e:
                     logging.error(f"Error parsing coordinates/times for storm '{name}': {e}")
-                    return
+                    continue
                 wind_kt = None
                 for line in description_text.splitlines():
                     if "Maximum sustained winds" in line:
@@ -220,14 +234,12 @@ def main(config=None):
                             break
                         except Exception as e:
                             logging.warning(f"Failed to parse wind speed for storm '{name}': {e}")
-                            continue
                 if wind_kt is None or wind_kt < wind_threshold_kt:
                     logging.info(f"Skipping storm '{name}' with wind speed {wind_kt} (threshold: {wind_threshold_kt})")
                     continue
                 wind_kmh = knots_to_kmh(wind_kt)
                 category_text = classify_storm(wind_kmh)
                 locations_result = analyze_proximity(coords, times, locations, alert_radius_km)
-                logging.info(f"Storm '{name}': wind_kt={wind_kt}, wind_kmh={wind_kmh}, category='{category_text}', affected_locations={locations_result}")
                 if locations and not locations_result:
                     logging.info(f"No monitored locations affected by storm '{name}'")
                     continue
@@ -238,28 +250,24 @@ def main(config=None):
                     "category_description": category_text,
                     "locations": locations_result
                 })
-                logging.info(f"Added storm '{name}' to output.")
+                logging.info(f"Storm '{name}' added to output. Affected locations: {locations_result}")
             except Exception as e:
-                logging.error(f"Error processing placemark: {e}")
+                logging.error(f"Exception processing storm: {e}")
                 continue
         if output["storms"]:
             output["message"] = f"{len(output['storms'])} active dangerous storm(s) found."
     try:
-        logging.info(f"Final output JSON: {json.dumps(output)}")
         with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=2)
-        logger.info(f"Updated {OUTPUT_JSON} with {len(output['storms'])} active dangerous systems.")
+        logging.info(f"Wrote results to {OUTPUT_JSON}")
         if webhook_url:
             try:
-                logger.info(f"Posting output to webhook: {webhook_url}")
-                logger.info(f"Payload: {json.dumps(output)}")
                 resp = requests.post(webhook_url, json=output, timeout=10)
-                logger.info(f"Webhook response status: {resp.status_code}")
-                logger.info(f"Webhook response text: {resp.text}")
+                logging.info(f"Webhook status: {resp.status_code}, response: {resp.text}")
             except Exception as e:
-                logger.error(f"Failed to POST to webhook: {e}")
+                logging.error(f"Failed to send webhook: {e}")
     except Exception as e:
-        logger.error(f"Failed to write output JSON: {e}")
+        logging.error(f"Failed to write output file: {e}")
 
 if __name__ == "__main__":
     main()
