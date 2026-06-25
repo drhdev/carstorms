@@ -262,11 +262,17 @@ function renderNPS(p){
 }
 
 function renderSargassum(p){
-  if(!p||!p.available) return "";
-  return card("Sargassum (seaweed)","past week",
-    `<a href="${p.region_url}" target="_blank" rel="noopener"><img src="${p.image}" alt="Sargassum density map" style="width:100%;border-radius:8px;display:block" loading="lazy"></a>
+  if(!p) return "";
+  if(!p.available) return card("Sargassum","",
+    `<div class="muted">No recent satellite read (cloud cover). <a href="${p.region_url||'#'}" target="_blank" rel="noopener">USF map</a></div>`,
+    srcFoot('USF AFAI via NOAA', p.source_url, null));
+  const lv=(p.level||'unknown'), cls = lv==='elevated'?'status-bad':(lv==='moderate'?'status-warn':(lv==='low'?'status-good':'muted'));
+  return card("Sargassum on beaches","7-day",
+    `<div class="big ${cls}">${lv.toUpperCase()}</div>
+     <div class="muted">near St. John${p.patches? ' · '+p.patches+' patch area(s) detected':''}</div>
+     ${row("Detail", `<a href="${p.region_url}" target="_blank" rel="noopener">USF regional map</a>`)}
      <div class="muted" style="font-size:12px;margin-top:6px">${p.note||''}</div>`,
-    srcFoot('USF Sargassum Watch System', p.source_url, null));
+    srcFoot('USF AFAI via NOAA', p.source_url, p.observed_at));
 }
 
 function renderWifi(){

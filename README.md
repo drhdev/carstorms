@@ -51,7 +51,7 @@ A single scale spans every hazard type:
 | **EPA AirNow** | Air quality / Saharan dust | yes | Activates when an AirNow key is configured |
 | **WAPA outage viewer** | Power outages | no | Undocumented outage-viewer JSON; St. John outages alert, both islands archived |
 | **NPS API** (park `viis`) | Park hours, weather blurb, alerts, events | yes | Dashboard "National Park" panel; activates with a free NPS key |
-| **USF SaWS** | Sargassum (seaweed) | no | Dashboard image panel (floating-algae density) + link to the USF regional map |
+| **USF AFAI via NOAA ERDDAP** | Sargassum (seaweed) | no | Low/Moderate/Elevated indicator from the 7-day floating-algae index in a box around St. John (+ USF regional map link) |
 | **Ferry timetable** (curated) | STT↔STJ next departures | no | Curated published schedule (reviewed monthly); next sailing both directions, all 3 routes |
 | **iNaturalist** | Recent wildlife sightings | no | Dashboard panel of recent verified observations near St. John (species, photo, link) |
 | **Leaflet + OpenStreetMap** | Trail map | no | Interactive St. John trail map with curated trailheads (Reef Bay, Ram Head, …) + stats |

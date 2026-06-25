@@ -187,11 +187,25 @@ def test_wildlife_panel(settings: Settings) -> None:
     assert panel["items"][0]["photo"] == "http://p.jpg"
 
 
-def test_sargassum_panel_static(settings: Settings) -> None:
-    panel = DashboardBuilder(settings)._panel_sargassum()
+def test_sargassum_panel_indicator(settings: Settings) -> None:
+    builder = DashboardBuilder(settings)
+    # No data -> unavailable but still offers the USF link.
+    assert builder._panel_sargassum(None)["available"] is False
+    data = {
+        "table": {
+            "columnNames": ["time", "latitude", "longitude", "AFAI"],
+            "rows": [
+                ["2026-06-25T12:00:00Z", 18.4, -64.8, 0.0015],
+                ["2026-06-25T12:00:00Z", 18.3, -64.7, None],  # cloud-masked
+                ["2026-06-25T12:00:00Z", 18.35, -64.75, -0.001],
+            ],
+        }
+    }
+    panel = builder._panel_sargassum(data)
     assert panel["available"] is True
-    assert panel["image"].endswith(".png")
-    assert "usf.edu" in panel["source_url"]
+    assert panel["level"] == "moderate"  # peak AFAI 0.0015 -> moderate
+    assert panel["afai_peak"] == 0.0015
+    assert panel["observed_at"].endswith("-04:00")
 
 
 def test_tropical_panel_quiet(settings: Settings) -> None:

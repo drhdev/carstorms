@@ -34,6 +34,10 @@ USGS_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 METAR_URL = "https://aviationweather.gov/api/data/metar"
 NDBC_URL = "https://www.ndbc.noaa.gov/data/realtime2/{buoy}.txt"
 INAT_URL = "https://api.inaturalist.org/v1/observations"
+# USF AFAI (floating-algae / Sargassum index) 7-day composite, hosted on NOAA ERDDAP.
+SARGASSUM_URL = (
+    "https://cwcgom.aoml.noaa.gov/erddap/griddap/noaa_aoml_atlantic_oceanwatch_AFAI_7D.json"
+)
 
 _MOORINGS = [
     "Maho Bay",
@@ -104,6 +108,7 @@ class DashboardBuilder:
                 self._safe("wapa", self._fetch_wapa(http)),
                 self._safe("nps", self._fetch_nps(http)),
                 self._safe("inat", self._fetch_inat(http)),
+                self._safe("sargassum", self._fetch_sargassum(http)),
                 self._safe("alerts", self._fetch_alerts()),
                 self._safe("beaches", self._fetch_beaches()),
                 self._safe("events", self._fetch_events()),
@@ -124,7 +129,7 @@ class DashboardBuilder:
             "beaches": self._panel_beaches(results["beaches"]),
             "power": self._panel_power(results["wapa"]),
             "national_park": self._panel_nps(results["nps"]),
-            "sargassum": self._panel_sargassum(),
+            "sargassum": self._panel_sargassum(results["sargassum"]),
             "wildlife": self._panel_wildlife(results["inat"]),
             "travel": self._panel_travel(results["metar"], results["alerts"]),
             "events": self._panel_events(results["events"]),
@@ -614,14 +619,43 @@ class DashboardBuilder:
         )
         return {"available": True, "count": len(items), "items": items, "source_url": explore}
 
-    def _panel_sargassum(self) -> dict[str, Any]:
-        # USF Sargassum Watch System composite (browser hotlinks the image).
+    async def _fetch_sargassum(self, http: httpx.AsyncClient) -> Any:
+        lat, lon = self.settings.latitude, self.settings.longitude
+        d = 0.13  # ~14 km box around St. John (latitude descends in this dataset)
+        subset = f"AFAI[(last)][({lat + d:.4f}):({lat - d:.4f})][({lon - d:.4f}):({lon + d:.4f})]"
+        return await get_json(http, f"{SARGASSUM_URL}?{subset}")
+
+    def _panel_sargassum(self, data: Any) -> dict[str, Any]:
+        region_url = (
+            "https://optics.marine.usf.edu/cgi-bin/optics_data?roi=N_ANTILLES&unfold=menu_VAS_Carib"
+        )
+        source_url = "https://optics.marine.usf.edu/projects/saws.html"
+        note = (
+            "Satellite floating-algae (Sargassum) index near St. John, past 7 days. "
+            "Windward (south/east) beaches are usually affected first."
+        )
+        base = {"region_url": region_url, "source_url": source_url, "note": note}
+        table = (data or {}).get("table") or {}
+        cols = table.get("columnNames") or []
+        rows = table.get("rows") or []
+        if "AFAI" not in cols:
+            return {"available": False, "reason": "unavailable", **base}
+        ai, ti = cols.index("AFAI"), cols.index("time")
+        values = [r[ai] for r in rows if r[ai] is not None]
+        observed_at = _ast(rows[0][ti]) if rows else None
+        if not values:
+            level, peak, patches = "unknown", None, 0  # all cloud-masked
+        else:
+            peak = max(values)
+            patches = sum(1 for v in values if v >= 0.001)
+            level = "elevated" if peak >= 0.002 else "moderate" if peak >= 0.001 else "low"
         return {
             "available": True,
-            "image": "https://optics.marine.usf.edu/projects/SaWS/images/saws_FAD_composite.png",
-            "region_url": "https://optics.marine.usf.edu/cgi-bin/optics_data?roi=N_ANTILLES&unfold=menu_VAS_Carib",
-            "source_url": "https://optics.marine.usf.edu/projects/saws.html",
-            "note": "Floating-algae (Sargassum) density, past week — USF SaWS (greens/reds = more).",
+            "level": level,
+            "afai_peak": round(peak, 5) if peak is not None else None,
+            "patches": patches,
+            "observed_at": observed_at,
+            **base,
         }
 
     def _panel_travel(self, metar: Any, events: Any) -> dict[str, Any]:
