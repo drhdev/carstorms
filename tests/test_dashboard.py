@@ -122,6 +122,26 @@ def test_alerts_panel(settings: Settings) -> None:
     assert item["recommendation"]  # template-generated advice present
 
 
+def test_beaches_panel_shows_all_unshortened(settings: Settings) -> None:
+    builder = DashboardBuilder(settings)
+    rows = [
+        {
+            "station_name": f"A Very Long Beach Monitoring Location Name Number {i}",
+            "island": "st_john",
+            "value": 10,
+            "unit": "MPN/100mL",
+            "status": "ok",
+            "sampled_at": "2026-06-25T00:00:00-04:00",
+        }
+        for i in range(55)
+    ]
+    panel = builder._panel_beaches(rows)
+    assert panel["count"] == 55
+    assert len(panel["items"]) == 55  # not capped
+    # full names preserved (not truncated)
+    assert panel["items"][0]["station_name"].startswith("A Very Long Beach Monitoring Location")
+
+
 def test_tropical_panel_quiet(settings: Settings) -> None:
     builder = DashboardBuilder(settings)
     panel = builder._panel_tropical({"activeStorms": []})
@@ -136,9 +156,16 @@ def test_power_panel_aggregates_by_island(settings: Settings) -> None:
         "outages": [
             {"outagePoint": {"lat": 18.33, "lng": -64.74}, "customersOutNow": 12},  # St. John
             {"outagePoint": {"lat": 18.34, "lng": -64.93}, "customersOutNow": 8},  # St. Thomas
-            {"outagePoint": {"lat": 17.74, "lng": -64.72}, "customersOutNow": 99},  # St. Croix (ignored)
+            {
+                "outagePoint": {"lat": 17.74, "lng": -64.72},
+                "customersOutNow": 99,
+            },  # St. Croix (ignored)
         ],
-        "summary": {"customersOutNow": 20, "customersServed": 54673, "updateTime": "2026-06-25T08:00:00-04:00"},
+        "summary": {
+            "customersOutNow": 20,
+            "customersServed": 54673,
+            "updateTime": "2026-06-25T08:00:00-04:00",
+        },
     }
     panel = builder._panel_power(data)
     assert panel["st_john"]["out"] == 12

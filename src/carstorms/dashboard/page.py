@@ -185,10 +185,10 @@ function renderBeaches(p){
   if(!p||!p.available) return card("Beach water quality","offline","<div class='muted'>"+(p&&p.reason||"")+"</div>");
   if(!p.items.length) return card("Beach water quality","","<div class='muted'>No recent samples</div>");
   return card("Beach water quality", p.count+" beaches",
-    p.items.slice(0,8).map(b=>{
+    p.items.map(b=>{
       const ok = b.status!=='exceedance';
-      return row((b.station_name||'').slice(0,26),
-        `<span class="${ok?'status-good':'status-bad'}">${ok?'OK':'Advisory'}</span> ${num(b.value,' '+(b.unit||''))}`);
+      return `<div class="row"><span style="flex:1;padding-right:8px">${b.station_name||''}</span>
+        <span style="white-space:nowrap"><span class="${ok?'status-good':'status-bad'}">${ok?'OK':'Advisory'}</span> ${num(b.value,' '+(b.unit||''))}</span></div>`;
     }).join(""));
 }
 

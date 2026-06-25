@@ -505,7 +505,7 @@ class DashboardBuilder:
             for r in rows
         ]
         items.sort(key=lambda x: (x["status"] != "exceedance", str(x["station_name"])))
-        return {"available": True, "count": len(items), "items": items[:40]}
+        return {"available": True, "count": len(items), "items": items}
 
     def _panel_power(self, data: Any) -> dict[str, Any]:
         if not data:
