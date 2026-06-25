@@ -157,6 +157,17 @@ def air_quality_level(aqi: int) -> AlertLevel:
     return AlertLevel.INFORMATIONAL  # Good / Moderate
 
 
+def power_outage_level(customers_out: int) -> AlertLevel:
+    """WAPA power-outage scale by number of customers currently without power."""
+    if customers_out >= 1000:
+        return AlertLevel.WARNING
+    if customers_out >= 200:
+        return AlertLevel.WATCH
+    if customers_out >= 25:
+        return AlertLevel.ADVISORY
+    return AlertLevel.INFORMATIONAL
+
+
 def airport_level(flight_category: str, *, closed: bool = False) -> AlertLevel:
     """STT airport status from METAR flight category (+ NOTAM closure flag)."""
     if closed:

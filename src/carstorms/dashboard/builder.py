@@ -17,9 +17,9 @@ from carstorms.config import Settings
 from carstorms.content.recommendations import recommendation_text
 from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
 from carstorms.directus.repository import DirectusRepository
-from carstorms.geo import haversine_km
+from carstorms.geo import haversine_km, usvi_island
 from carstorms.logging import get_logger
-from carstorms.models import AlertLevel, HazardType
+from carstorms.models import AlertLevel, HazardType, Island
 from carstorms.sources.base import get_json, get_text
 
 log = get_logger(__name__)
@@ -107,6 +107,7 @@ class DashboardBuilder:
                 self._safe("quakes", self._fetch_quakes(http, now)),
                 self._safe("metar", self._fetch_metar(http)),
                 self._safe("ndbc", self._fetch_ndbc(http, now)),
+                self._safe("wapa", self._fetch_wapa(http)),
                 self._safe("alerts", self._fetch_alerts()),
                 self._safe("beaches", self._fetch_beaches()),
                 self._safe("events", self._fetch_events()),
@@ -125,6 +126,7 @@ class DashboardBuilder:
             "tropical": self._panel_tropical(results["tropical"]),
             "earthquakes": self._panel_quakes(results["quakes"]),
             "beaches": self._panel_beaches(results["beaches"]),
+            "power": self._panel_power(results["wapa"]),
             "travel": self._panel_travel(results["metar"], results["alerts"]),
             "events": self._panel_events(results["events"]),
             "moorings": self._panel_moorings(results["marine"], results["forecast"]),
@@ -258,6 +260,16 @@ class DashboardBuilder:
                 "water_temp_c": _num(cols[14]),
             }
         return None
+
+    async def _fetch_wapa(self, http: httpx.AsyncClient) -> Any:
+        base = self.settings.wapa_outage_base.rstrip("/")
+        outages = await get_json(http, f"{base}/data/outages.json")
+        summary: dict[str, Any] = {}
+        try:
+            summary = await get_json(http, f"{base}/data/outageSummary.json")
+        except Exception:
+            summary = {}
+        return {"outages": outages, "summary": summary}
 
     async def _fetch_alerts(self) -> Any:
         if self.repo is None:
@@ -494,6 +506,30 @@ class DashboardBuilder:
         ]
         items.sort(key=lambda x: (x["status"] != "exceedance", str(x["station_name"])))
         return {"available": True, "count": len(items), "items": items[:40]}
+
+    def _panel_power(self, data: Any) -> dict[str, Any]:
+        if not data:
+            return self._unavailable()
+        summary = data.get("summary") or {}
+        per = {Island.ST_JOHN: {"out": 0, "count": 0}, Island.ST_THOMAS: {"out": 0, "count": 0}}
+        for outage in data.get("outages") or []:
+            point = outage.get("outagePoint") or {}
+            lat, lng = point.get("lat"), point.get("lng")
+            if lat is None or lng is None:
+                continue
+            island = usvi_island(float(lat), float(lng))
+            if island not in per:
+                continue
+            per[island]["out"] += int(outage.get("customersOutNow") or 0)
+            per[island]["count"] += 1
+        return {
+            "available": True,
+            "st_john": per[Island.ST_JOHN],
+            "st_thomas": per[Island.ST_THOMAS],
+            "territory_out": summary.get("customersOutNow"),
+            "customers_served": summary.get("customersServed"),
+            "updated_at": _ast(summary.get("updateTime")),
+        }
 
     def _panel_travel(self, metar: Any, events: Any) -> dict[str, Any]:
         ob = metar[0] if isinstance(metar, list) and metar else {}

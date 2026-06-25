@@ -129,6 +129,24 @@ def test_tropical_panel_quiet(settings: Settings) -> None:
     assert "No active" in panel["note"]
 
 
+def test_power_panel_aggregates_by_island(settings: Settings) -> None:
+    builder = DashboardBuilder(settings)
+    assert builder._panel_power(None)["available"] is False
+    data = {
+        "outages": [
+            {"outagePoint": {"lat": 18.33, "lng": -64.74}, "customersOutNow": 12},  # St. John
+            {"outagePoint": {"lat": 18.34, "lng": -64.93}, "customersOutNow": 8},  # St. Thomas
+            {"outagePoint": {"lat": 17.74, "lng": -64.72}, "customersOutNow": 99},  # St. Croix (ignored)
+        ],
+        "summary": {"customersOutNow": 20, "customersServed": 54673, "updateTime": "2026-06-25T08:00:00-04:00"},
+    }
+    panel = builder._panel_power(data)
+    assert panel["st_john"]["out"] == 12
+    assert panel["st_thomas"]["out"] == 8
+    assert panel["territory_out"] == 20
+    assert panel["updated_at"].endswith("-04:00")
+
+
 # --- build() resilience -----------------------------------------------------
 
 

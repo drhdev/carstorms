@@ -36,6 +36,7 @@ _SOURCE_LABELS: dict[SourceName, str] = {
     SourceName.WQP: "EPA Water Quality Portal",
     SourceName.AIRNOW: "EPA AirNow",
     SourceName.AVWX: "NWS Aviation Weather",
+    SourceName.WAPA: "WAPA outage viewer",
     SourceName.MANUAL: "CarStorms operator",
 }
 

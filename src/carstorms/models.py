@@ -24,7 +24,8 @@ class SourceName(StrEnum):
     WQP = "wqp"  # EPA Water Quality Portal (beach water quality)
     AIRNOW = "airnow"  # EPA AirNow (air quality / Saharan dust)
     AVWX = "aviationweather"  # NWS Aviation Weather (airport METAR/NOTAM)
-    MANUAL = "manual"  # operator-curated overrides (ferry, WAPA, VITEMA, …)
+    WAPA = "wapa"  # Virgin Islands Water & Power Authority (power outages)
+    MANUAL = "manual"  # operator-curated overrides (ferry, VITEMA, …)
 
 
 class Island(StrEnum):

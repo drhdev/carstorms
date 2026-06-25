@@ -49,7 +49,8 @@ A single scale spans every hazard type:
 | **EPA Water Quality Portal** | Beach water quality (Enterococcus) | no | Per-beach readings archived to `carstorm_measurements`; advisory only from a fresh sample |
 | **NWS Aviation Weather** (`TIST`) | STT airport conditions/closure | no¹ | METAR flight category; FAA NOTAM closure when credentials set |
 | **EPA AirNow** | Air quality / Saharan dust | yes | Activates when an AirNow key is configured |
-| **Operator overrides** (`carstorm_manual_alerts`) | Ferry, WAPA power/water, VITEMA/DOH, any ad-hoc | — | The reliable path for hazards with no machine feed |
+| **WAPA outage viewer** | Power outages | no | Undocumented outage-viewer JSON; St. John outages alert, both islands archived |
+| **Operator overrides** (`carstorm_manual_alerts`) | Ferry, WAPA water, VITEMA/DOH, any ad-hoc | — | The reliable path for hazards with no machine feed |
 
 ¹ METAR needs no key; the optional FAA NOTAM closure check needs free FAA credentials.
 

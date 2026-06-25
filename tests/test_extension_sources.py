@@ -14,6 +14,7 @@ from carstorms.sources.airport import METAR_URL, AirportStatusSource
 from carstorms.sources.airquality import OBSERVATION_URL, AirQualitySource
 from carstorms.sources.beaches import RESULT_URL, STATION_URL, BeachWaterQualitySource, usvi_island
 from carstorms.sources.manual import ManualAlertSource
+from carstorms.sources.wapa import OUTAGES_PATH, SUMMARY_PATH, WAPAOutageSource
 
 # --- Beaches (EPA Water Quality Portal) ------------------------------------
 
@@ -209,6 +210,60 @@ async def test_manual_alerts_become_observations(live_settings: Settings) -> Non
     assert obs.island is Island.ST_JOHN
     assert obs.recommendation.startswith("Use the car barge")
     assert obs.event_key == "manual:1"
+
+
+# --- WAPA power outages -----------------------------------------------------
+
+
+def _outage(lat: float, lng: float, out: int) -> dict:
+    return {
+        "outageRecID": f"x-{lat}-{lng}",
+        "outagePoint": {"lat": lat, "lng": lng},
+        "customersOutNow": out,
+        "streetsAffected": ["Some Road"],
+        "crewAssigned": False,
+    }
+
+
+async def test_wapa_aggregates_by_island_and_alerts_st_john(settings: Settings) -> None:
+    base = settings.wapa_outage_base.rstrip("/")
+    outages = [
+        _outage(18.33, -64.74, 30),  # St. John -> 30 out (>= threshold -> alert)
+        _outage(18.34, -64.93, 8),  # St. Thomas -> archived only
+        _outage(17.74, -64.72, 7),  # St. Croix -> ignored
+    ]
+    summary = {
+        "customersOutNow": 45,
+        "customersServed": 54673,
+        "updateTime": "2026-06-25T08:00:00-04:00",
+    }
+    with respx.mock:
+        respx.get(f"{base}{OUTAGES_PATH}").mock(return_value=httpx.Response(200, json=outages))
+        respx.get(f"{base}{SUMMARY_PATH}").mock(return_value=httpx.Response(200, json=summary))
+        async with httpx.AsyncClient() as client:
+            result = await WAPAOutageSource(settings).poll(client)
+
+    by_island = {m.island: m.value for m in result.measurements}
+    assert by_island[Island.ST_JOHN] == 30
+    assert by_island[Island.ST_THOMAS] == 8  # St. Croix excluded
+    assert len(result.observations) == 1
+    obs = result.observations[0]
+    assert obs.hazard_type is HazardType.POWER_OUTAGE
+    assert obs.level is AlertLevel.ADVISORY
+    assert obs.event_key == "wapa:power:st_john"
+
+
+async def test_wapa_no_alert_below_threshold(settings: Settings) -> None:
+    base = settings.wapa_outage_base.rstrip("/")
+    with respx.mock:
+        respx.get(f"{base}{OUTAGES_PATH}").mock(
+            return_value=httpx.Response(200, json=[_outage(18.33, -64.74, 5)])
+        )
+        respx.get(f"{base}{SUMMARY_PATH}").mock(return_value=httpx.Response(200, json={}))
+        async with httpx.AsyncClient() as client:
+            result = await WAPAOutageSource(settings).poll(client)
+    assert result.observations == []  # below threshold, archived only
+    assert any(m.island is Island.ST_JOHN and m.value == 5 for m in result.measurements)
 
 
 # --- Source gating ----------------------------------------------------------

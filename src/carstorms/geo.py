@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import math
 
+from carstorms.models import Island
+
 EARTH_RADIUS_KM = 6371.0088
+
+
+def usvi_island(lat: float, lon: float) -> Island | None:
+    """Classify a USVI coordinate by island. St. Croix (lat < 18) is out of scope."""
+    if lat < 18.0:
+        return None  # St. Croix
+    return Island.ST_JOHN if lon > -64.82 else Island.ST_THOMAS
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

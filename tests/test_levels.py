@@ -10,6 +10,7 @@ from carstorms.content.levels import (
     cyclone_level,
     earthquake_level,
     knots_to_kmh,
+    power_outage_level,
 )
 from carstorms.models import AlertLevel
 
@@ -64,3 +65,10 @@ def test_airport_level() -> None:
     assert airport_level("IFR") == AlertLevel.ADVISORY
     assert airport_level("LIFR") == AlertLevel.WATCH
     assert airport_level("VFR", closed=True) == AlertLevel.WARNING
+
+
+def test_power_outage_level() -> None:
+    assert power_outage_level(5) == AlertLevel.INFORMATIONAL
+    assert power_outage_level(30) == AlertLevel.ADVISORY
+    assert power_outage_level(300) == AlertLevel.WATCH
+    assert power_outage_level(1500) == AlertLevel.WARNING

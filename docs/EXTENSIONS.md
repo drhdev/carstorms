@@ -190,8 +190,13 @@ Built and tested:
 - **Air quality / Saharan dust** (`sources/airquality.py`, AirNow) — implemented and
   gated on `CARSTORMS_AIRNOW_API_KEY`; archives AQI, alerts at "Unhealthy for
   Sensitive Groups" (101) or worse.
+- **Power outages (WAPA)** (`sources/wapa.py`) — reads the outage-viewer's
+  undocumented `/data/outages.json` + `/data/outageSummary.json` (no key);
+  classifies outages by island from their coordinates, alerts on St. John outages
+  (>= `wapa_alert_min_customers`) and archives per-island customer-out totals. Also a
+  dashboard "Power (WAPA)" panel.
 - **Manual-override channel** (`sources/manual.py` + `carstorm_manual_alerts`) — the
-  reliable path for ferry, WAPA power/water, VITEMA/DOH and any ad-hoc safety/health
+  reliable path for ferry, WAPA water, VITEMA/DOH and any ad-hoc safety/health
   alert; supports custom per-alert recommendations.
 - **St. Thomas coverage** (island tagging) + **travel/early-arrival** advice in the
   recommendation templates (airport/ferry, and auto-appended to tropical watch+).
@@ -204,7 +209,6 @@ Deferred (by design / pending decisions):
   feed (CariCOOS inundation forecast) is wired in.
 - **Automated scrapers** for VIPA (ferry/airport announcements), WAPA water/boil-water
   advisories and VITEMA/DOH — manual channel first per the chosen approach.
-- **poweroutage.us** power-outage counts — pending an API key (or outage-viewer scrape).
 
 ## 8. Decisions (resolved for Phase 1)
 - No-API hazards → **manual-override channel first** (built); scrapers later.

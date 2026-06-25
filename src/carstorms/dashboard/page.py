@@ -179,6 +179,15 @@ function renderBeaches(p){
     }).join(""));
 }
 
+function renderPower(p){
+  if(!p||!p.available) return card("Power (WAPA)","offline","");
+  const sj=p.st_john||{}, st=p.st_thomas||{};
+  return card("Power (WAPA)", p.updated_at? fmtTime(p.updated_at):"",
+    `${row("St. John", `<span class="${sj.out>0?'status-bad':'status-good'}">${num(sj.out)} out</span>${sj.count? ' · '+sj.count+' outage(s)':''}`)}
+     ${row("St. Thomas", `<span class="${st.out>0?'status-warn':'status-good'}">${num(st.out)} out</span>${st.count? ' · '+st.count+' outage(s)':''}`)}
+     ${row("Territory", `${num(p.territory_out)} out of ${num(p.customers_served)}`)}`);
+}
+
 function renderTravel(p){
   if(!p||!p.available) return card("Travel","offline","");
   const a=p.airport||{};
@@ -220,7 +229,7 @@ async function load(){
       renderForecast(P.forecast), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
       renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
       renderTropical(P.tropical), renderQuakes(P.earthquakes), renderBeaches(P.beaches),
-      renderTravel(P.travel), renderEvents(P.events), renderMoorings(P.moorings)
+      renderPower(P.power), renderTravel(P.travel), renderEvents(P.events), renderMoorings(P.moorings)
     ].join("");
     document.getElementById('dh').innerHTML = renderHealthFooter(P.data_health);
     document.getElementById('updated').textContent = 'Updated ' + fmtTime(d.generated_at) + ' AST · auto-refreshes';

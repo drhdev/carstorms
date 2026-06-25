@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     airport_name: str = "Cyril E. King Airport (STT)"
     faa_client_id: str = ""
     faa_client_secret: str = ""
+    # WAPA power outages — undocumented outage-viewer JSON (no key). St. John power
+    # outages at or above this many customers raise an alert.
+    wapa_outage_base: str = "http://www.outageviewer.viwapa.vi:7575"
+    wapa_alert_min_customers: int = 25
 
     # --- Hazard detection thresholds -------------------------------------
     # A tropical cyclone whose forecast track passes within this distance of

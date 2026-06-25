@@ -17,6 +17,7 @@ from carstorms.sources.nhc import NHCSource
 from carstorms.sources.nws import NWSSource
 from carstorms.sources.openmeteo import OpenMeteoSource
 from carstorms.sources.usgs import USGSSource
+from carstorms.sources.wapa import WAPAOutageSource
 
 __all__ = [
     "AirQualitySource",
@@ -29,6 +30,7 @@ __all__ = [
     "OpenMeteoSource",
     "SourceResult",
     "USGSSource",
+    "WAPAOutageSource",
     "build_sources",
 ]
 
@@ -46,6 +48,7 @@ def build_sources(settings: Settings) -> list[HazardSource]:
         OpenMeteoSource(settings),  # simple thunderstorms
         BeachWaterQualitySource(settings),  # beach water quality (EPA WQP)
         AirportStatusSource(settings),  # STT airport (METAR + optional NOTAM)
+        WAPAOutageSource(settings),  # power outages (WAPA outage viewer)
     ]
     if settings.airnow_enabled:
         sources.append(AirQualitySource(settings))  # air quality / Saharan dust

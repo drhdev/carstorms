@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from carstorms.content.levels import beach_level
+from carstorms.geo import usvi_island
 from carstorms.models import (
     HazardObservation,
     HazardType,
@@ -24,15 +25,11 @@ from carstorms.models import (
 )
 from carstorms.sources.base import HazardSource, get_json, get_text
 
+# Re-exported so ``carstorms.sources.beaches.usvi_island`` keeps resolving.
+__all__ = ["RESULT_URL", "STATION_URL", "BeachWaterQualitySource", "usvi_island"]
+
 STATION_URL = "https://www.waterqualitydata.us/data/Station/search"
 RESULT_URL = "https://www.waterqualitydata.us/data/Result/search"
-
-
-def usvi_island(lat: float, lon: float) -> Island | None:
-    """Classify a USVI coordinate. St. Croix (lat < 18) is out of scope here."""
-    if lat < 18.0:
-        return None  # St. Croix
-    return Island.ST_JOHN if lon > -64.82 else Island.ST_THOMAS
 
 
 @dataclass(slots=True)
