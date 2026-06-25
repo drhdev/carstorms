@@ -57,14 +57,20 @@ DASHBOARD_HTML = """<!doctype html>
 <main>
   <div class="alerts" id="alerts"></div>
   <div class="grid" id="grid"></div>
-  <footer>CarStorms · data from NWS, NHC, USGS, Open-Meteo, EPA, NOAA · not a substitute for official warnings</footer>
+  <footer>
+    <div id="dh" style="margin-bottom:6px"></div>
+    CarStorms · times in St. John local time (AST) · data from NWS, NHC, USGS, Open-Meteo, EPA, NOAA · not a substitute for official warnings
+  </footer>
 </main>
 <script>
 const LVL = ["#3b82f6","#9aa7bd","#eab308","#f97316","#ef4444","#a855f7"];
-const fmtT = s => { if(!s) return "—"; const d=new Date(s.length<=16? s+"Z":s);
-  return isNaN(d)? s : d.toLocaleString([], {weekday:'short',hour:'2-digit',minute:'2-digit'}); };
-const fmtTime = s => { if(!s) return "—"; const d=new Date(s.length<=16? s+"Z":s);
-  return isNaN(d)? s : d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+const TZ = 'America/St_Thomas';  // all times shown in St. John local time (AST)
+const fmtTime = s => { if(!s) return "—"; const d=new Date(s);
+  return isNaN(d)? s : d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZone:TZ}); };
+const fmtDay = s => { if(!s) return "—"; const d=new Date(s);
+  return isNaN(d)? s : d.toLocaleDateString('en-US',{weekday:'short',timeZone:TZ}); };
+const fmtDT = s => { if(!s) return "—"; const d=new Date(s);
+  return isNaN(d)? s : d.toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:TZ}); };
 const num = (v,u="") => (v===null||v===undefined||v==="")? "—" : v+u;
 const card = (title, extra, body) =>
   `<div class="card"><h2><span>${title}</span><span class="muted">${extra||""}</span></h2>${body}</div>`;
@@ -94,9 +100,9 @@ function renderForecast(p){
 
 function renderDaily(p){
   if(!p||!p.available||!p.daily) return "";
-  const days=p.daily.map(d=>row(`${(d.weather||{}).emoji||""} ${fmtT(d.date).split(',')[0]}`,
-    `${num(Math.round(d.temp_max))}° / ${num(Math.round(d.temp_min))}° · ${num(d.precip_prob,'%')}`)).join("");
-  return card("7-day outlook","", days);
+  const days=p.daily.map(d=>row(`${(d.weather||{}).emoji||""} ${fmtDay(d.date)}`,
+    `${num(Math.round(d.temp_max))}° / ${num(Math.round(d.temp_min))}° · 🌧️${num(d.precip_prob,'%')}`)).join("");
+  return card("7-day outlook","🌧️% = rain chance", days);
 }
 
 function renderUV(p){
@@ -110,9 +116,13 @@ function renderUV(p){
 function renderAir(p){
   if(!p||!p.available) return card("Air quality","offline","");
   const a=p.us_aqi; const cls=(a>150)?'status-bad':(a>100?'status-warn':'status-good');
+  const dustCls = /elevated|high/.test(p.dust_label||"")?'status-warn':'muted';
   return card("Air quality / dust","",
-    `<div class="big ${cls}">${num(a)}</div><div class="muted">${p.category||""}</div>
-     ${row("PM2.5",num(p.pm2_5,' µg/m³'))}${row("Dust",num(p.dust,' µg/m³'))}`);
+    `<div class="big ${cls}">${num(a)}</div><div class="muted">US AQI · ${p.category||""}</div>
+     ${row("PM2.5",num(p.pm2_5,' µg/m³'))}
+     ${row("PM10",num(p.pm10,' µg/m³'))}
+     ${row("Dust",`${num(p.dust,' µg/m³')} <span class="${dustCls}">${p.dust_label||''}</span>`)}
+     ${row("Aerosol depth",num(p.aerosol_optical_depth))}`);
 }
 
 function renderMarine(p){
@@ -147,9 +157,15 @@ function renderTropical(p){
 
 function renderQuakes(p){
   if(!p||!p.available) return card("Earthquakes","offline","");
-  if(!p.items.length) return card("Earthquakes","24h","<div class='status-good'>None nearby</div>");
-  return card("Earthquakes (24h)", p.count,
-    p.items.map(q=>row(`M${num(q.magnitude)}`, `${num(q.distance_km,' km')} · ${(q.place||'').slice(0,28)}`)).join(""));
+  if(!p.items.length) return card("Earthquakes (24h)","","<div class='status-good'>✓ None nearby</div>");
+  return card("Earthquakes (24h)", p.count+" recent",
+    p.items.map(q=>{
+      const mag=q.magnitude||0, mc=mag>=4.5?'status-bad':(mag>=3?'status-warn':'');
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+        <div><span class="${mc}" style="font-size:17px;font-weight:600">M${num(q.magnitude)}</span>
+          <span class="muted"> · ${num(q.distance_km,' km')} away · ${fmtDT(q.time)}</span></div>
+        <div class="muted" style="font-size:13px">${q.place||''}</div></div>`;
+    }).join(""));
 }
 
 function renderBeaches(p){
@@ -166,16 +182,17 @@ function renderBeaches(p){
 function renderTravel(p){
   if(!p||!p.available) return card("Travel","offline","");
   const a=p.airport||{};
-  let b = row("STT airport", `${a.flight_category||"—"}`);
-  (p.disruptions||[]).forEach(d=> b+=row(d.title, `<span class="status-warn">L${d.level}</span>`));
-  if(!(p.disruptions||[]).length) b+=row("Ferry","<span class='status-good'>no reported disruption</span>");
-  return card("Travel","STT / ferry", b);
+  let b = row("✈️ STT airport", `${a.flight_category||"—"}`);
+  (p.ferry_routes||[]).forEach(f=> b+=row("⛴️ "+f.name, `<span class="muted" style="font-size:12px">${f.note||""}</span>`));
+  (p.disruptions||[]).forEach(d=> b+=`<div class="row"><span class="status-warn">⚠ ${d.title}</span><span class="status-warn">L${d.level}</span></div>`);
+  if(!(p.disruptions||[]).length) b+=`<div class="muted" style="font-size:12px;margin-top:4px">No reported disruptions. Live ferry status isn't published — check operators.</div>`;
+  return card("Travel","STT airport / ferries", b);
 }
 
 function renderEvents(p){
-  if(!p||!p.available||!p.items||!p.items.length) return card("What's on","",`<div class="muted">No curated events.</div>`);
+  if(!p||!p.available||!p.items||!p.items.length) return "";  // hide when nothing curated
   return card("What's on", p.count,
-    p.items.slice(0,6).map(e=>row(e.title||"", e.location? `<span class="muted">${e.location}</span>`:fmtT(e.starts_at))).join(""));
+    p.items.slice(0,6).map(e=>row(e.title||"", e.location? `<span class="muted">${e.location}</span>`:fmtDT(e.starts_at))).join(""));
 }
 
 function renderMoorings(p){
@@ -187,10 +204,9 @@ function renderMoorings(p){
      <div class="muted" style="font-size:12px">${p.note||""}</div>`);
 }
 
-function renderHealth(p){
-  if(!p||!p.available) return "";
-  return card("Data health","",
-    (p.items||[]).map(s=>row(s.source, `<span class="${s.status==='ok'?'status-good':'status-bad'}">${s.status}</span> ${s.age_minutes!=null? s.age_minutes+'m':''}`)).join(""));
+function renderHealthFooter(p){
+  if(!p||!p.available||!p.items||!p.items.length) return "";
+  return 'Data freshness: ' + p.items.map(s=>`${s.source} ${s.status==='ok'?'✓':'✕'}${s.age_minutes!=null? ' '+s.age_minutes+'m':''}`).join(' · ');
 }
 
 async function load(){
@@ -201,12 +217,13 @@ async function load(){
     const P = d.panels||{};
     renderAlerts(P.alerts);
     document.getElementById('grid').innerHTML = [
-      renderForecast(P.forecast), renderUV(P.uv), renderMarine(P.marine), renderTides(P.tides),
-      renderAir(P.air_quality), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
+      renderForecast(P.forecast), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
+      renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
       renderTropical(P.tropical), renderQuakes(P.earthquakes), renderBeaches(P.beaches),
-      renderTravel(P.travel), renderEvents(P.events), renderMoorings(P.moorings), renderHealth(P.data_health)
+      renderTravel(P.travel), renderEvents(P.events), renderMoorings(P.moorings)
     ].join("");
-    document.getElementById('updated').textContent = 'Updated ' + fmtTime(d.generated_at) + ' · auto-refreshes';
+    document.getElementById('dh').innerHTML = renderHealthFooter(P.data_health);
+    document.getElementById('updated').textContent = 'Updated ' + fmtTime(d.generated_at) + ' AST · auto-refreshes';
   } catch(e) {
     document.getElementById('updated').textContent = 'Could not load data — retrying…';
   }

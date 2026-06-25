@@ -96,7 +96,9 @@ def test_forecast_panel_none_safe(settings: Settings) -> None:
     assert builder._panel_uv(j)["today_max"] == 8.5
     assert builder._panel_uv(j)["risk"] == "very high"
     sun_moon = builder._panel_sun_moon(j, datetime(2026, 6, 25, tzinfo=UTC))
-    assert sun_moon["sunrise"] == "2026-06-25T05:45"
+    # Emitted in St. John local time (AST, UTC-4).
+    assert sun_moon["sunrise"].startswith("2026-06-25T05:45")
+    assert sun_moon["sunrise"].endswith("-04:00")
 
 
 def test_alerts_panel(settings: Settings) -> None:

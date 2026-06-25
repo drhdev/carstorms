@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 from carstorms.directus.client import DirectusClient
 from carstorms.models import EventUpdate, HazardEvent, ManualAlert, Measurement, SentMessage
 from carstorms.sources.base import SourceResult
 
+# St. John local time (AST, UTC-4 year-round). Stored timestamps use this so the
+# archive reads in local time; instants are unchanged.
+AST = timezone(timedelta(hours=-4))
+
 
 def _iso(value: datetime | None) -> str | None:
-    return value.isoformat() if value else None
+    if value is None:
+        return None
+    return (value.astimezone(AST) if value.tzinfo else value).isoformat()
 
 
 def _now() -> datetime:

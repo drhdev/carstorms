@@ -8,7 +8,7 @@ so the transforms are easy to test and resilient to missing data.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -42,9 +42,52 @@ _MOORINGS = [
     "Salt Pond Bay",
 ]
 
+# St. John ferry routes — no operator publishes a live status API, so these are
+# listed statically and any disruption comes from the manual-override channel.
+_FERRY_ROUTES = [
+    {"name": "Red Hook (STT) - Cruz Bay", "note": "passenger, roughly hourly, ~15-20 min"},
+    {"name": "Charlotte Amalie (STT) - Cruz Bay", "note": "passenger, limited daily sailings"},
+    {"name": "Red Hook - Cruz Bay car barge", "note": "vehicle barge, roughly hourly"},
+]
 
-def _iso(dt: datetime) -> str:
+# Atlantic Standard Time (USVI is UTC-4 year-round, no daylight saving).
+AST = timezone(timedelta(hours=-4))
+
+
+def _ast(value: Any) -> str | None:
+    """Return a St. John local-time (AST) ISO string from any input form.
+
+    Open-Meteo / CO-OPS naive strings are already AST wall-clock (we request that
+    timezone); epoch milliseconds (USGS) and UTC datetimes are converted."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value if value.tzinfo else value.replace(tzinfo=AST)
+        return dt.astimezone(AST).isoformat()
+    if isinstance(value, (int, float)):  # epoch milliseconds
+        return datetime.fromtimestamp(value / 1000, tz=UTC).astimezone(AST).isoformat()
+    text = str(value).strip().replace(" ", "T")
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    dt = dt.replace(tzinfo=AST) if dt.tzinfo is None else dt.astimezone(AST)
     return dt.isoformat()
+
+
+def _dust_label(dust: Any) -> str:
+    value = _to_float(dust)
+    if value is None:
+        return "unknown"
+    if value < 20:
+        return "low"
+    if value < 50:
+        return "moderate"
+    if value < 100:
+        return "elevated (Saharan dust likely)"
+    return "high (Saharan dust)"
 
 
 class DashboardBuilder:
@@ -88,7 +131,7 @@ class DashboardBuilder:
             "data_health": self._panel_health(results["health"]),
         }
         return {
-            "generated_at": _iso(now),
+            "generated_at": _ast(now),
             "location": {
                 "name": self.settings.location_name,
                 "latitude": self.settings.latitude,
@@ -141,7 +184,7 @@ class DashboardBuilder:
                 "latitude": self.settings.latitude,
                 "longitude": self.settings.longitude,
                 "timezone": self.settings.timezone_name,
-                "current": "us_aqi,pm2_5,pm10,dust,uv_index",
+                "current": "us_aqi,pm2_5,pm10,dust,aerosol_optical_depth,ozone,nitrogen_dioxide,uv_index",
             },
         )
 
@@ -208,7 +251,7 @@ class DashboardBuilder:
                 return None if value == "MM" else float(value)
 
             return {
-                "observed_at": _iso(observed),
+                "observed_at": _ast(observed),
                 "wave_height_m": _num(cols[8]),
                 "dominant_period_s": _num(cols[9]),
                 "mean_direction_deg": _num(cols[11]),
@@ -280,7 +323,7 @@ class DashboardBuilder:
                 continue
             next24.append(
                 {
-                    "time": t,
+                    "time": _ast(t),
                     "temp": temps[i] if i < len(temps) else None,
                     "precip_prob": probs[i] if i < len(probs) else None,
                     "weather": describe_weather(codes[i] if i < len(codes) else None),
@@ -293,7 +336,7 @@ class DashboardBuilder:
         for i, d in enumerate(daily.get("time", [])):
             days.append(
                 {
-                    "date": d,
+                    "date": _ast(d),
                     "weather": describe_weather((daily.get("weather_code") or [None])[i]),
                     "temp_max": (daily.get("temperature_2m_max") or [None])[i],
                     "temp_min": (daily.get("temperature_2m_min") or [None])[i],
@@ -310,7 +353,7 @@ class DashboardBuilder:
                 "wind": cur.get("wind_speed_10m"),
                 "gusts": cur.get("wind_gusts_10m"),
                 "wind_dir": cur.get("wind_direction_10m"),
-                "time": current_time,
+                "time": _ast(current_time),
             },
             "hourly": next24,
             "daily": days,
@@ -334,8 +377,8 @@ class DashboardBuilder:
         sunset = (daily.get("sunset") or [None])[0]
         return {
             "available": True,
-            "sunrise": sunrise,
-            "sunset": sunset,
+            "sunrise": _ast(sunrise),
+            "sunset": _ast(sunset),
             "moon": moon_phase(now),
         }
 
@@ -351,7 +394,11 @@ class DashboardBuilder:
             "pm2_5": cur.get("pm2_5"),
             "pm10": cur.get("pm10"),
             "dust": cur.get("dust"),
-            "time": cur.get("time"),
+            "dust_label": _dust_label(cur.get("dust")),
+            "aerosol_optical_depth": cur.get("aerosol_optical_depth"),
+            "ozone": cur.get("ozone"),
+            "nitrogen_dioxide": cur.get("nitrogen_dioxide"),
+            "time": _ast(cur.get("time")),
         }
 
     def _panel_marine(self, marine: Any, ndbc: Any) -> dict[str, Any]:
@@ -366,7 +413,7 @@ class DashboardBuilder:
             "swell_height_m": cur.get("swell_wave_height"),
             "swell_period_s": cur.get("swell_wave_period"),
             "sea_surface_temp_c": cur.get("sea_surface_temperature"),
-            "time": cur.get("time"),
+            "time": _ast(cur.get("time")),
             "source": "Open-Meteo (model)",
         }
         if ndbc:
@@ -380,7 +427,11 @@ class DashboardBuilder:
         upcoming = []
         for p in j["predictions"]:
             upcoming.append(
-                {"time": p.get("t"), "type": p.get("type"), "height_ft": _to_float(p.get("v"))}
+                {
+                    "time": _ast(p.get("t")),
+                    "type": p.get("type"),
+                    "height_ft": _to_float(p.get("v")),
+                }
             )
         return {"available": True, "station": self.settings.tide_station_id, "events": upcoming[:6]}
 
@@ -421,7 +472,7 @@ class DashboardBuilder:
                 {
                     "magnitude": props.get("mag"),
                     "place": props.get("place"),
-                    "time_ms": props.get("time"),
+                    "time": _ast(props.get("time")),
                     "distance_km": distance,
                 }
             )
@@ -437,7 +488,7 @@ class DashboardBuilder:
                 "value": r.get("value"),
                 "unit": r.get("unit"),
                 "status": r.get("status"),
-                "sampled_at": r.get("sampled_at"),
+                "sampled_at": _ast(r.get("sampled_at")),
             }
             for r in rows
         ]
@@ -459,7 +510,12 @@ class DashboardBuilder:
                 for e in events
                 if e.hazard_type in (HazardType.FERRY, HazardType.AIRPORT)
             ]
-        return {"available": True, "airport": airport, "disruptions": ferry_alerts}
+        return {
+            "available": True,
+            "airport": airport,
+            "ferry_routes": _FERRY_ROUTES,
+            "disruptions": ferry_alerts,
+        }
 
     def _panel_events(self, rows: Any) -> dict[str, Any]:
         if rows is None:
