@@ -75,6 +75,19 @@ const num = (v,u="") => (v===null||v===undefined||v==="")? "—" : v+u;
 const card = (title, extra, body) =>
   `<div class="card"><h2><span>${title}</span><span class="muted">${extra||""}</span></h2>${body}</div>`;
 const row = (k,v) => `<div class="row"><span class="muted">${k}</span><span>${v}</span></div>`;
+const clockTime = () => new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:TZ});
+const clockDate = () => new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',timeZone:TZ});
+
+function renderClock(){
+  return `<div class="card"><h2><span>St. John time</span><span class="muted">AST</span></h2>
+    <div class="big" id="clock-time">${clockTime()}</div>
+    <div class="muted" id="clock-date">${clockDate()}</div></div>`;
+}
+function tick(){
+  const t=document.getElementById('clock-time'), d=document.getElementById('clock-date');
+  if(t) t.textContent=clockTime();
+  if(d) d.textContent=clockDate();
+}
 
 function renderAlerts(p){
   const el = document.getElementById('alerts');
@@ -226,6 +239,7 @@ async function load(){
     const P = d.panels||{};
     renderAlerts(P.alerts);
     document.getElementById('grid').innerHTML = [
+      renderClock(),
       renderForecast(P.forecast), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
       renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
       renderTropical(P.tropical), renderQuakes(P.earthquakes), renderBeaches(P.beaches),
@@ -237,6 +251,8 @@ async function load(){
     document.getElementById('updated').textContent = 'Could not load data — retrying…';
   }
 }
+document.getElementById('grid').innerHTML = renderClock();  // show the clock instantly
+setInterval(tick, 1000);
 load();
 setInterval(load, 120000);
 </script>
