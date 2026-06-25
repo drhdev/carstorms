@@ -381,6 +381,7 @@ class DashboardBuilder:
             "now": now_uv,
             "today_max": today_max,
             "risk": uv_risk(today_max if today_max is not None else now_uv),
+            "time": _ast((j.get("current") or {}).get("time")),
         }
 
     def _panel_sun_moon(self, j: Any, now: datetime) -> dict[str, Any]:
@@ -486,6 +487,7 @@ class DashboardBuilder:
                     "place": props.get("place"),
                     "time": _ast(props.get("time")),
                     "distance_km": distance,
+                    "url": props.get("url"),
                 }
             )
         return {"available": True, "count": len(items), "items": items}
@@ -505,7 +507,8 @@ class DashboardBuilder:
             for r in rows
         ]
         items.sort(key=lambda x: (x["status"] != "exceedance", str(x["station_name"])))
-        return {"available": True, "count": len(items), "items": items}
+        latest = max((str(i["sampled_at"]) for i in items if i["sampled_at"]), default=None)
+        return {"available": True, "count": len(items), "items": items, "latest_sampled_at": latest}
 
     def _panel_power(self, data: Any) -> dict[str, Any]:
         if not data:
@@ -533,11 +536,18 @@ class DashboardBuilder:
 
     def _panel_travel(self, metar: Any, events: Any) -> dict[str, Any]:
         ob = metar[0] if isinstance(metar, list) and metar else {}
+        obs_epoch = ob.get("obsTime")  # METAR obsTime is epoch *seconds*
+        obs_dt = (
+            datetime.fromtimestamp(obs_epoch, tz=UTC)
+            if isinstance(obs_epoch, (int, float))
+            else None
+        )
         airport = {
             "icao": self.settings.airport_icao,
             "name": self.settings.airport_name,
             "flight_category": ob.get("fltCat"),
             "raw": ob.get("rawOb"),
+            "obs_time": _ast(obs_dt),
         }
         ferry_alerts = []
         if isinstance(events, list):

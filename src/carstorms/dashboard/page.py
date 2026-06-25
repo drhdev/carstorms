@@ -46,7 +46,9 @@ DASHBOARD_HTML = """<!doctype html>
   .lvl3{border-color:var(--l3)} .lvl4{border-color:var(--l4)} .lvl5{border-color:var(--l5)}
   .status-good{color:var(--good)} .status-warn{color:var(--warn)} .status-bad{color:var(--bad)}
   footer { color:var(--muted); font-size:12px; text-align:center; padding:8px; }
-  a { color:#7db1ff; }
+  .foot { margin-top:8px; padding-top:6px; border-top:1px solid var(--line); font-size:11px; color:var(--muted); }
+  a, .foot a { color:#7db1ff; text-decoration:none; }
+  a:hover, .foot a:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -72,9 +74,26 @@ const fmtDay = s => { if(!s) return "—"; const d=new Date(s);
 const fmtDT = s => { if(!s) return "—"; const d=new Date(s);
   return isNaN(d)? s : d.toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:TZ}); };
 const num = (v,u="") => (v===null||v===undefined||v==="")? "—" : v+u;
-const card = (title, extra, body) =>
-  `<div class="card"><h2><span>${title}</span><span class="muted">${extra||""}</span></h2>${body}</div>`;
+const card = (title, extra, body, foot) =>
+  `<div class="card"><h2><span>${title}</span><span class="muted">${extra||""}</span></h2>${body}${foot||""}</div>`;
 const row = (k,v) => `<div class="row"><span class="muted">${k}</span><span>${v}</span></div>`;
+const link = (label,url) => url? `<a href="${url}" target="_blank" rel="noopener">${label}</a>` : label;
+// Details pages that hold more than the dashboard shows (only where one exists).
+const LINKS = {
+  forecast:'https://forecast.weather.gov/MapClick.php?lat=18.335&lon=-64.735',
+  ndbc:'https://www.ndbc.noaa.gov/station_page.php?station=41052',
+  tides:'https://tidesandcurrents.noaa.gov/stationhome.html?id=9751381',
+  nhc:'https://www.nhc.noaa.gov/', usgs:'https://earthquake.usgs.gov/earthquakes/map/',
+  wapa:'http://www.outageviewer.viwapa.vi:7575/', vipa:'https://www.viport.com/',
+  moorings:'https://www.nps.gov/viis/planyourvisit/mooring-buoys.htm'
+};
+// Footer: "Source (linked if a details page exists) · as of <measured time AST>".
+function srcFoot(label, url, t){
+  if(!label && !t) return "";
+  const src = label? link(label,url) : "";
+  const when = t? ('as of '+fmtDT(t)) : "";
+  return `<div class="foot">${src}${(src&&when)?' · ':''}${when}</div>`;
+}
 const clockTime = () => new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:TZ});
 const clockDate = () => new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',timeZone:TZ});
 
@@ -108,14 +127,16 @@ function renderForecast(p){
   return card("Now & next 24h", fmtTime(c.time),
     `<div class="big">${(c.weather||{}).emoji||""} ${num(Math.round(c.temp))}°C</div>
      <div class="muted">${(c.weather||{}).label||""} · feels ${num(Math.round(c.feels_like))}° · wind ${num(Math.round(c.wind))} km/h</div>
-     <div class="hstrip" style="margin-top:8px">${strip}</div>`);
+     <div class="hstrip" style="margin-top:8px">${strip}</div>`,
+    srcFoot('Open-Meteo / NWS', LINKS.forecast, c.time));
 }
 
 function renderDaily(p){
   if(!p||!p.available||!p.daily) return "";
   const days=p.daily.map(d=>row(`${(d.weather||{}).emoji||""} ${fmtDay(d.date)}`,
     `${num(Math.round(d.temp_max))}° / ${num(Math.round(d.temp_min))}° · 🌧️${num(d.precip_prob,'%')}`)).join("");
-  return card("7-day outlook","🌧️% = rain chance", days);
+  return card("7-day outlook","🌧️% = rain chance", days,
+    srcFoot('Open-Meteo / NWS', LINKS.forecast, (p.daily[0]||{}).date));
 }
 
 function renderUV(p){
@@ -123,7 +144,8 @@ function renderUV(p){
   const cls = (p.risk==='extreme'||p.risk==='very high')?'status-bad':(p.risk==='high'?'status-warn':'status-good');
   return card("UV index", p.risk||"",
     `<div class="big ${cls}">${num(p.today_max)}</div>
-     <div class="muted">now ${num(p.now)} · ${p.risk} risk — protect 9am-4pm</div>`);
+     <div class="muted">now ${num(p.now)} · ${p.risk} risk — protect 9am-4pm</div>`,
+    srcFoot('Open-Meteo', null, p.time));
 }
 
 function renderAir(p){
@@ -135,7 +157,8 @@ function renderAir(p){
      ${row("PM2.5",num(p.pm2_5,' µg/m³'))}
      ${row("PM10",num(p.pm10,' µg/m³'))}
      ${row("Dust",`${num(p.dust,' µg/m³')} <span class="${dustCls}">${p.dust_label||''}</span>`)}
-     ${row("Aerosol depth",num(p.aerosol_optical_depth))}`);
+     ${row("Aerosol depth",num(p.aerosol_optical_depth))}`,
+    srcFoot('Open-Meteo Air Quality', null, p.time));
 }
 
 function renderMarine(p){
@@ -144,13 +167,15 @@ function renderMarine(p){
         + row("Swell", num(p.swell_height_m,' m'))
         + row("Sea temp", num(p.sea_surface_temp_c,'°C'));
   if(p.observed) b += row("Buoy waves", num(p.observed.wave_height_m,' m'));
-  return card("Marine", p.observed?"+buoy":"model", b);
+  return card("Marine", p.observed?"+buoy":"model", b,
+    srcFoot('Open-Meteo model · NDBC 41052', LINKS.ndbc, p.time));
 }
 
 function renderTides(p){
   if(!p||!p.available) return card("Tides","offline","");
   const e=(p.events||[]).map(t=>row(`${t.type==='H'?'▲ High':'▼ Low'}`, `${fmtTime(t.time)} · ${num(t.height_ft,' ft')}`)).join("");
-  return card("Tides","Lameshur Bay", e||"<div class='muted'>—</div>");
+  return card("Tides","Lameshur Bay", e||"<div class='muted'>—</div>",
+    srcFoot('NOAA Tides & Currents', LINKS.tides, null));
 }
 
 function renderSunMoon(p){
@@ -158,27 +183,32 @@ function renderSunMoon(p){
   const m=p.moon||{};
   return card("Sun & moon","",
     row("Sunrise",fmtTime(p.sunrise))+row("Sunset",fmtTime(p.sunset))+
-    row("Moon",`${m.emoji||""} ${m.name||""} (${num(m.illumination_pct,'%')})`));
+    row("Moon",`${m.emoji||""} ${m.name||""} (${num(m.illumination_pct,'%')})`),
+    srcFoot('Open-Meteo / computed', null, p.sunrise));
 }
 
 function renderTropical(p){
   if(!p) return "";
-  if(!p.active||!p.active.length) return card("Tropical outlook","",`<div class="status-good">✓ ${p.note||"No active systems"}</div>`);
+  if(!p.active||!p.active.length) return card("Tropical outlook","",`<div class="status-good">✓ ${p.note||"No active systems"}</div>`,
+    srcFoot('NOAA NHC', LINKS.nhc, null));
   return card("Tropical outlook", p.active.length+" active",
-    p.active.map(s=>row(`${s.classification||""} ${s.name||""}`, num(s.intensity_kt,' kt'))).join(""));
+    p.active.map(s=>row(`${s.classification||""} ${s.name||""}`, num(s.intensity_kt,' kt'))).join(""),
+    srcFoot('NOAA NHC', LINKS.nhc, null));
 }
 
 function renderQuakes(p){
   if(!p||!p.available) return card("Earthquakes","offline","");
-  if(!p.items.length) return card("Earthquakes (24h)","","<div class='status-good'>✓ None nearby</div>");
+  if(!p.items.length) return card("Earthquakes (24h)","","<div class='status-good'>✓ None nearby</div>",
+    srcFoot('USGS', LINKS.usgs, null));
   return card("Earthquakes (24h)", p.count+" recent",
     p.items.map(q=>{
       const mag=q.magnitude||0, mc=mag>=4.5?'status-bad':(mag>=3?'status-warn':'');
       return `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
         <div><span class="${mc}" style="font-size:17px;font-weight:600">M${num(q.magnitude)}</span>
           <span class="muted"> · ${num(q.distance_km,' km')} away · ${fmtDT(q.time)}</span></div>
-        <div class="muted" style="font-size:13px">${q.place||''}</div></div>`;
-    }).join(""));
+        <div class="muted" style="font-size:13px">${link(q.place||'', q.url)}</div></div>`;
+    }).join(""),
+    srcFoot('USGS', LINKS.usgs, null));
 }
 
 function renderBeaches(p){
@@ -189,7 +219,8 @@ function renderBeaches(p){
       const ok = b.status!=='exceedance';
       return `<div class="row"><span style="flex:1;padding-right:8px">${b.station_name||''}</span>
         <span style="white-space:nowrap"><span class="${ok?'status-good':'status-bad'}">${ok?'OK':'Advisory'}</span> ${num(b.value,' '+(b.unit||''))}</span></div>`;
-    }).join(""));
+    }).join(""),
+    srcFoot('EPA Water Quality Portal', null, p.latest_sampled_at));
 }
 
 function renderPower(p){
@@ -198,7 +229,8 @@ function renderPower(p){
   return card("Power (WAPA)", p.updated_at? fmtTime(p.updated_at):"",
     `${row("St. John", `<span class="${sj.out>0?'status-bad':'status-good'}">${num(sj.out)} out</span>${sj.count? ' · '+sj.count+' outage(s)':''}`)}
      ${row("St. Thomas", `<span class="${st.out>0?'status-warn':'status-good'}">${num(st.out)} out</span>${st.count? ' · '+st.count+' outage(s)':''}`)}
-     ${row("Territory", `${num(p.territory_out)} out of ${num(p.customers_served)}`)}`);
+     ${row("Territory", `${num(p.territory_out)} out of ${num(p.customers_served)}`)}`,
+    srcFoot('WAPA outage viewer', LINKS.wapa, p.updated_at));
 }
 
 function renderTravel(p){
@@ -208,13 +240,15 @@ function renderTravel(p){
   (p.ferry_routes||[]).forEach(f=> b+=row("⛴️ "+f.name, `<span class="muted" style="font-size:12px">${f.note||""}</span>`));
   (p.disruptions||[]).forEach(d=> b+=`<div class="row"><span class="status-warn">⚠ ${d.title}</span><span class="status-warn">L${d.level}</span></div>`);
   if(!(p.disruptions||[]).length) b+=`<div class="muted" style="font-size:12px;margin-top:4px">No reported disruptions. Live ferry status isn't published — check operators.</div>`;
-  return card("Travel","STT airport / ferries", b);
+  return card("Travel","STT airport / ferries", b,
+    srcFoot('NWS Aviation Weather · VIPA', LINKS.vipa, a.obs_time));
 }
 
 function renderEvents(p){
   if(!p||!p.available||!p.items||!p.items.length) return "";  // hide when nothing curated
   return card("What's on", p.count,
-    p.items.slice(0,6).map(e=>row(e.title||"", e.location? `<span class="muted">${e.location}</span>`:fmtDT(e.starts_at))).join(""));
+    p.items.slice(0,6).map(e=>row(link(e.title||"", e.url), e.location? `<span class="muted">${e.location}</span>`:fmtDT(e.starts_at))).join(""),
+    srcFoot('Curated notices', null, null));
 }
 
 function renderMoorings(p){
@@ -223,7 +257,8 @@ function renderMoorings(p){
   return card("Boating & moorings","",
     `<div>Conditions: <span class="${cls}">${(p.suitability||'unknown').toUpperCase()}</span></div>
      <div class="muted" style="font-size:13px;margin:6px 0">${(p.areas||[]).join(' · ')}</div>
-     <div class="muted" style="font-size:12px">${p.note||""}</div>`);
+     <div class="muted" style="font-size:12px">${p.note||""}</div>`,
+    srcFoot('NPS · Open-Meteo', LINKS.moorings, null));
 }
 
 function renderHealthFooter(p){
