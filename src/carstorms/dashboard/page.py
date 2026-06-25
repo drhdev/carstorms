@@ -49,7 +49,11 @@ DASHBOARD_HTML = """<!doctype html>
   .foot { margin-top:8px; padding-top:6px; border-top:1px solid var(--line); font-size:11px; color:var(--muted); }
   a, .foot a { color:#7db1ff; text-decoration:none; }
   a:hover, .foot a:hover { text-decoration:underline; }
+  #map { height:300px; border-radius:8px; margin-bottom:8px; }
+  .leaflet-popup-content { color:#111; }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 <header>
@@ -59,6 +63,7 @@ DASHBOARD_HTML = """<!doctype html>
 <main>
   <div class="alerts" id="alerts"></div>
   <div class="grid" id="grid"></div>
+  <div class="grid" id="trailgrid" style="margin-top:12px"></div>
   <footer>
     <div id="dh" style="margin-bottom:6px"></div>
     CarStorms · times in St. John local time (AST) · data from NWS, NHC, USGS, Open-Meteo, EPA, NOAA · not a substitute for official warnings
@@ -294,6 +299,39 @@ function renderHealthFooter(p){
   return 'Data freshness: ' + p.items.map(s=>`${s.source} ${s.status==='ok'?'✓':'✕'}${s.age_minutes!=null? ' '+s.age_minutes+'m':''}`).join(' · ');
 }
 
+function renderWildlife(p){
+  if(!p||!p.available||!p.items||!p.items.length) return card("Wildlife sightings","offline","");
+  const items = p.items.map(o=>`<a href="${o.url}" target="_blank" rel="noopener" style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);color:inherit">
+     ${o.photo? `<img src="${o.photo}" alt="" loading="lazy" style="width:42px;height:42px;border-radius:6px;object-fit:cover">`:''}
+     <span style="flex:1"><div>${o.name}</div><div class="muted" style="font-size:12px">${o.observed_on||''} · ${(o.place||'').slice(0,30)}</div></span></a>`).join("");
+  return card("Recent wildlife", p.count+" iNaturalist", items, srcFoot('iNaturalist', p.source_url, null));
+}
+
+// Popular St. John (V.I. National Park) trails — curated trailheads + stats.
+const TRAILS = [
+  {name:'Reef Bay Trail', lat:18.3389, lng:-64.7236, len:'2.4 mi one-way', diff:'Strenuous', high:'937 ft → sea level', note:'Petroglyphs & sugar mill ruins'},
+  {name:'Ram Head Trail', lat:18.3035, lng:-64.7044, len:'1.0 mi', diff:'Moderate', high:'~200 ft', note:'Salt Pond Bay to cliffs'},
+  {name:'Lind Point Trail', lat:18.3324, lng:-64.7948, len:'1.1 mi', diff:'Easy', high:'~160 ft', note:'Cruz Bay to Honeymoon Beach'},
+  {name:'Cinnamon Bay Loop', lat:18.3475, lng:-64.7470, len:'1.1 mi', diff:'Easy', high:'flat', note:'Plantation ruins, self-guided'},
+  {name:'Bordeaux Mountain', lat:18.3367, lng:-64.7100, len:'varies', diff:'Strenuous', high:'1,277 ft (island high point)', note:'Highest point on St. John'},
+  {name:'Salt Pond Bay / Drunk Bay', lat:18.3060, lng:-64.7060, len:'0.5 mi', diff:'Easy', high:'sea level', note:'Beach & tide pools'},
+];
+function renderTrails(){
+  const list = TRAILS.map(t=>row(`🥾 ${t.name}`, `<span class="muted" style="font-size:12px">${t.diff} · ${t.len} · ${t.high}</span>`)).join("");
+  return `<div class="card" style="grid-column:1 / -1">
+    <h2><span>Trails &amp; map</span><span class="muted">V.I. National Park</span></h2>
+    <div id="map"></div>${list}
+    <div class="foot"><a href="https://www.nps.gov/viis/planyourvisit/things2do.htm" target="_blank" rel="noopener">NPS trails</a> · map data © OpenStreetMap</div></div>`;
+}
+function initMap(){
+  const el = document.getElementById('map');
+  if(typeof L==='undefined' || !el || el._leaflet_id) return;  // Leaflet missing or already inited
+  const map = L.map('map',{scrollWheelZoom:false}).setView([18.335,-64.735],12);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'© OpenStreetMap'}).addTo(map);
+  TRAILS.forEach(t=> L.marker([t.lat,t.lng]).addTo(map)
+    .bindPopup(`<b>${t.name}</b><br>${t.diff} · ${t.len}<br>High point: ${t.high}<br>${t.note}`));
+}
+
 async function load(){
   try {
     const r = await fetch('/api/dashboard.json', {cache:'no-store'});
@@ -307,7 +345,8 @@ async function load(){
       renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
       renderSargassum(P.sargassum), renderTropical(P.tropical), renderQuakes(P.earthquakes),
       renderBeaches(P.beaches), renderPower(P.power), renderNPS(P.national_park),
-      renderTravel(P.travel), renderMoorings(P.moorings), renderWifi(), renderEvents(P.events)
+      renderTravel(P.travel), renderMoorings(P.moorings), renderWildlife(P.wildlife),
+      renderWifi(), renderEvents(P.events)
     ].join("");
     document.getElementById('dh').innerHTML = renderHealthFooter(P.data_health);
     document.getElementById('updated').textContent = 'Updated ' + fmtTime(d.generated_at) + ' AST · auto-refreshes';
@@ -316,6 +355,8 @@ async function load(){
   }
 }
 document.getElementById('grid').innerHTML = renderClock();  // show the clock instantly
+document.getElementById('trailgrid').innerHTML = renderTrails();  // static; render once
+initMap();
 setInterval(tick, 1000);
 load();
 setInterval(load, 120000);

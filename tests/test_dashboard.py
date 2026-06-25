@@ -164,6 +164,29 @@ def test_nps_panel(settings: Settings) -> None:
     assert panel["alerts"][0]["category"] == "Park Closure"
 
 
+def test_wildlife_panel(settings: Settings) -> None:
+    builder = DashboardBuilder(settings)
+    assert builder._panel_wildlife(None)["available"] is False
+    data = {
+        "results": [
+            {
+                "observed_on": "2026-06-20",
+                "uri": "http://x",
+                "place_guess": "Cruz Bay, St John",
+                "taxon": {
+                    "name": "Iguana iguana",
+                    "preferred_common_name": "Green Iguana",
+                    "default_photo": {"square_url": "http://p.jpg"},
+                },
+            }
+        ]
+    }
+    panel = builder._panel_wildlife(data)
+    assert panel["available"] is True and panel["count"] == 1
+    assert panel["items"][0]["name"] == "Green Iguana"
+    assert panel["items"][0]["photo"] == "http://p.jpg"
+
+
 def test_sargassum_panel_static(settings: Settings) -> None:
     panel = DashboardBuilder(settings)._panel_sargassum()
     assert panel["available"] is True

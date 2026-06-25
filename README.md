@@ -53,6 +53,8 @@ A single scale spans every hazard type:
 | **NPS API** (park `viis`) | Park hours, weather blurb, alerts, events | yes | Dashboard "National Park" panel; activates with a free NPS key |
 | **USF SaWS** | Sargassum (seaweed) | no | Dashboard image panel (floating-algae density) + link to the USF regional map |
 | **Ferry timetable** (curated) | STT↔STJ next departures | no | Curated published schedule (reviewed monthly); next sailing both directions, all 3 routes |
+| **iNaturalist** | Recent wildlife sightings | no | Dashboard panel of recent verified observations near St. John (species, photo, link) |
+| **Leaflet + OpenStreetMap** | Trail map | no | Interactive St. John trail map with curated trailheads (Reef Bay, Ram Head, …) + stats |
 | **Operator overrides** (`carstorm_manual_alerts`) | Ferry, WAPA water, VITEMA/DOH, any ad-hoc | — | The reliable path for hazards with no machine feed |
 
 ¹ METAR needs no key; the optional FAA NOTAM closure check needs free FAA credentials.

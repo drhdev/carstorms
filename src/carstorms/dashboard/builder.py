@@ -33,6 +33,7 @@ NHC_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
 USGS_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 METAR_URL = "https://aviationweather.gov/api/data/metar"
 NDBC_URL = "https://www.ndbc.noaa.gov/data/realtime2/{buoy}.txt"
+INAT_URL = "https://api.inaturalist.org/v1/observations"
 
 _MOORINGS = [
     "Maho Bay",
@@ -102,6 +103,7 @@ class DashboardBuilder:
                 self._safe("ndbc", self._fetch_ndbc(http, now)),
                 self._safe("wapa", self._fetch_wapa(http)),
                 self._safe("nps", self._fetch_nps(http)),
+                self._safe("inat", self._fetch_inat(http)),
                 self._safe("alerts", self._fetch_alerts()),
                 self._safe("beaches", self._fetch_beaches()),
                 self._safe("events", self._fetch_events()),
@@ -123,6 +125,7 @@ class DashboardBuilder:
             "power": self._panel_power(results["wapa"]),
             "national_park": self._panel_nps(results["nps"]),
             "sargassum": self._panel_sargassum(),
+            "wildlife": self._panel_wildlife(results["inat"]),
             "travel": self._panel_travel(results["metar"], results["alerts"]),
             "events": self._panel_events(results["events"]),
             "moorings": self._panel_moorings(results["marine"], results["forecast"]),
@@ -266,6 +269,23 @@ class DashboardBuilder:
         except Exception:
             summary = {}
         return {"outages": outages, "summary": summary}
+
+    async def _fetch_inat(self, http: httpx.AsyncClient) -> Any:
+        return await get_json(
+            http,
+            INAT_URL,
+            params={
+                "lat": self.settings.latitude,
+                "lng": self.settings.longitude,
+                "radius": 12,  # km — covers St. John and nearby cays
+                "per_page": 8,
+                "order_by": "observed_on",
+                "order": "desc",
+                "photos": "true",
+                "quality_grade": "research",
+            },
+            headers={"User-Agent": self.settings.http_user_agent},
+        )
 
     async def _fetch_alerts(self) -> Any:
         if self.repo is None:
@@ -570,6 +590,29 @@ class DashboardBuilder:
             "alerts": alerts,
             "url": f"https://www.nps.gov/{self.settings.nps_park_code}/",
         }
+
+    def _panel_wildlife(self, data: Any) -> dict[str, Any]:
+        if not data:
+            return self._unavailable()
+        items = []
+        for obs in (data.get("results") or [])[:8]:
+            taxon = obs.get("taxon") or {}
+            photo = taxon.get("default_photo") or {}
+            items.append(
+                {
+                    "name": taxon.get("preferred_common_name") or taxon.get("name") or "Unknown",
+                    "sci": taxon.get("name"),
+                    "photo": photo.get("square_url"),
+                    "observed_on": obs.get("observed_on"),
+                    "place": obs.get("place_guess"),
+                    "url": obs.get("uri"),
+                }
+            )
+        explore = (
+            f"https://www.inaturalist.org/observations?lat={self.settings.latitude}"
+            f"&lng={self.settings.longitude}&radius=12"
+        )
+        return {"available": True, "count": len(items), "items": items, "source_url": explore}
 
     def _panel_sargassum(self) -> dict[str, Any]:
         # USF Sargassum Watch System composite (browser hotlinks the image).
