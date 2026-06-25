@@ -214,7 +214,7 @@ function renderQuakes(p){
 function renderBeaches(p){
   if(!p||!p.available) return card("Beach water quality","offline","<div class='muted'>"+(p&&p.reason||"")+"</div>");
   if(!p.items.length) return card("Beach water quality","","<div class='muted'>No recent samples</div>");
-  return card("Beach water quality", p.count+" beaches",
+  return card("Beach water quality", p.count+" St. John beaches",
     p.items.map(b=>{
       const ok = b.status!=='exceedance';
       return `<div class="row"><span style="flex:1;padding-right:8px">${b.station_name||''}</span>
@@ -237,11 +237,39 @@ function renderTravel(p){
   if(!p||!p.available) return card("Travel","offline","");
   const a=p.airport||{};
   let b = row("✈️ STT airport", `${a.flight_category||"—"}`);
-  (p.ferry_routes||[]).forEach(f=> b+=row("⛴️ "+f.name, `<span class="muted" style="font-size:12px">${f.note||""}</span>`));
+  (p.ferries||[]).forEach(f=> b+=`<div style="padding:5px 0;border-bottom:1px solid var(--line)">
+      <div>⛴️ ${f.name}</div>
+      <div class="muted" style="font-size:12px">next → Cruz Bay ${fmtDT(f.to_st_john)} · → St. Thomas ${fmtDT(f.to_st_thomas)}</div></div>`);
   (p.disruptions||[]).forEach(d=> b+=`<div class="row"><span class="status-warn">⚠ ${d.title}</span><span class="status-warn">L${d.level}</span></div>`);
-  if(!(p.disruptions||[]).length) b+=`<div class="muted" style="font-size:12px;margin-top:4px">No reported disruptions. Live ferry status isn't published — check operators.</div>`;
-  return card("Travel","STT airport / ferries", b,
-    srcFoot('NWS Aviation Weather · VIPA', LINKS.vipa, a.obs_time));
+  return card("Travel","next ferry / STT", b,
+    srcFoot('NWS Aviation Weather · ferry timetable', LINKS.vipa, a.obs_time));
+}
+
+function renderNPS(p){
+  if(!p||!p.available) return card("National Park","",`<div class='muted'>${(p&&p.reason)||'unavailable'}</div>`);
+  let b = "";
+  if(p.hours_today) b += row("Hours today", p.hours_today);
+  else if(p.hours_description) b += row("Hours", p.hours_description);
+  if(p.weather_info) b += `<div class="muted" style="font-size:13px;margin:6px 0">${p.weather_info}</div>`;
+  (p.alerts||[]).forEach(a=> b += `<div class="row"><span class="status-warn" style="padding-right:8px">${a.category||'Alert'}</span><span style="flex:1;text-align:right">${link(a.title||'', a.url)}</span></div>`);
+  if(!(p.alerts||[]).length) b += `<div class="status-good" style="font-size:13px">✓ No park alerts</div>`;
+  return card("Virgin Islands Nat'l Park","", b, srcFoot('NPS', p.url, null));
+}
+
+function renderSargassum(p){
+  if(!p||!p.available) return "";
+  return card("Sargassum (seaweed)","past week",
+    `<a href="${p.region_url}" target="_blank" rel="noopener"><img src="${p.image}" alt="Sargassum density map" style="width:100%;border-radius:8px;display:block" loading="lazy"></a>
+     <div class="muted" style="font-size:12px;margin-top:6px">${p.note||''}</div>`,
+    srcFoot('USF Sargassum Watch System', p.source_url, null));
+}
+
+function renderWifi(){
+  return card("Connectivity / Wi-Fi","St. John",
+    `${row("Public library","Elaine I. Sprauve Library, Cruz Bay")}
+     ${row("Park visitor center","V.I. Nat'l Park, Cruz Bay")}
+     <div class="muted" style="font-size:12px;margin-top:6px">Many Cruz Bay & Coral Bay cafés/restaurants offer free Wi-Fi. Cell coverage is good in town, patchy on remote trails and beaches.</div>`,
+    srcFoot('Local info', null, null));
 }
 
 function renderEvents(p){
@@ -258,7 +286,7 @@ function renderMoorings(p){
     `<div>Conditions: <span class="${cls}">${(p.suitability||'unknown').toUpperCase()}</span></div>
      <div class="muted" style="font-size:13px;margin:6px 0">${(p.areas||[]).join(' · ')}</div>
      <div class="muted" style="font-size:12px">${p.note||""}</div>`,
-    srcFoot('NPS · Open-Meteo', LINKS.moorings, null));
+    srcFoot('Open-Meteo (derived)', null, null));
 }
 
 function renderHealthFooter(p){
@@ -277,8 +305,9 @@ async function load(){
       renderClock(),
       renderForecast(P.forecast), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
       renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
-      renderTropical(P.tropical), renderQuakes(P.earthquakes), renderBeaches(P.beaches),
-      renderPower(P.power), renderTravel(P.travel), renderEvents(P.events), renderMoorings(P.moorings)
+      renderSargassum(P.sargassum), renderTropical(P.tropical), renderQuakes(P.earthquakes),
+      renderBeaches(P.beaches), renderPower(P.power), renderNPS(P.national_park),
+      renderTravel(P.travel), renderMoorings(P.moorings), renderWifi(), renderEvents(P.events)
     ].join("");
     document.getElementById('dh').innerHTML = renderHealthFooter(P.data_health);
     document.getElementById('updated').textContent = 'Updated ' + fmtTime(d.generated_at) + ' AST · auto-refreshes';

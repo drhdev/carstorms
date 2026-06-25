@@ -1,0 +1,27 @@
+What data can i get from NPS National Park Service about St. John? Like Qualitative Information About Current weather Conditions and Trail conditions and extended forecast for this location in numbers and Park Opening Hours? Park Ranger Events & Trails?
+
+Boating & Moorings Info is not available on NPS Page (404)
+Public Wifi and Internet Access on St. John
+
+In Travel STT Airport / Ferries Box Show the next Ferry for all Three in both directions when they are leaving according to schedule. get the schedule once per month on the 1st and make sure it is scraped properly.
+
+Beach Water Quality: Only show beaches on St. John, no other islands
+
+Add sargassum forecast with data from https://optics.marine.usf.edu/
+
+Trail Maps & Elevation: Use the Mapbox Boundaries Matrix API or Esri ArcGIS REST APIs combined with open-source GIS files from the National Park Service (NPS) Data Store to render interactive maps of popular trails like Ram Head or Reef Bay.
+
+https://www.inaturalist.org/pages/api+reference
+https://api.inaturalist.org/v2/docs/
+
+
+https://stthomassource.com/
+or other st john related news feeds rss
+
+https://www.nps.gov/subjects/developer/guides.htm
+https://www.nps.gov/subjects/developer/api-documentation.htm
+https://www.nps.gov/subjects/developer/code.htm
+
+Maps: Instead of Google Maps (which charges per view), use OpenStreetMap combined with Leaflet.js. It is 100% free and often features highly accurate hiking footpaths drawn by locals that Google ignores.
+
+https://leafletjs.com/

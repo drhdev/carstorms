@@ -142,6 +142,35 @@ def test_beaches_panel_shows_all_unshortened(settings: Settings) -> None:
     assert panel["items"][0]["station_name"].startswith("A Very Long Beach Monitoring Location")
 
 
+def test_nps_panel(settings: Settings) -> None:
+    builder = DashboardBuilder(settings)
+    assert builder._panel_nps(None)["available"] is False
+    data = {
+        "park": {
+            "data": [
+                {
+                    "weatherInfo": "Tropical, warm year-round.",
+                    "operatingHours": [{"description": "Open all year"}],
+                }
+            ]
+        },
+        "alerts": {
+            "data": [{"category": "Park Closure", "title": "Trail X closed", "url": "http://x"}]
+        },
+    }
+    panel = builder._panel_nps(data)
+    assert panel["available"] is True
+    assert panel["weather_info"] == "Tropical, warm year-round."
+    assert panel["alerts"][0]["category"] == "Park Closure"
+
+
+def test_sargassum_panel_static(settings: Settings) -> None:
+    panel = DashboardBuilder(settings)._panel_sargassum()
+    assert panel["available"] is True
+    assert panel["image"].endswith(".png")
+    assert "usf.edu" in panel["source_url"]
+
+
 def test_tropical_panel_quiet(settings: Settings) -> None:
     builder = DashboardBuilder(settings)
     panel = builder._panel_tropical({"activeStorms": []})

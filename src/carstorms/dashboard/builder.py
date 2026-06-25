@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 
 from carstorms.config import Settings
+from carstorms.content.ferry import next_departures
 from carstorms.content.recommendations import recommendation_text
 from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
 from carstorms.directus.repository import DirectusRepository
@@ -40,14 +41,6 @@ _MOORINGS = [
     "Reef Bay",
     "Great Lameshur Bay",
     "Salt Pond Bay",
-]
-
-# St. John ferry routes — no operator publishes a live status API, so these are
-# listed statically and any disruption comes from the manual-override channel.
-_FERRY_ROUTES = [
-    {"name": "Red Hook (STT) - Cruz Bay", "note": "passenger, roughly hourly, ~15-20 min"},
-    {"name": "Charlotte Amalie (STT) - Cruz Bay", "note": "passenger, limited daily sailings"},
-    {"name": "Red Hook - Cruz Bay car barge", "note": "vehicle barge, roughly hourly"},
 ]
 
 # Atlantic Standard Time (USVI is UTC-4 year-round, no daylight saving).
@@ -108,6 +101,7 @@ class DashboardBuilder:
                 self._safe("metar", self._fetch_metar(http)),
                 self._safe("ndbc", self._fetch_ndbc(http, now)),
                 self._safe("wapa", self._fetch_wapa(http)),
+                self._safe("nps", self._fetch_nps(http)),
                 self._safe("alerts", self._fetch_alerts()),
                 self._safe("beaches", self._fetch_beaches()),
                 self._safe("events", self._fetch_events()),
@@ -127,6 +121,8 @@ class DashboardBuilder:
             "earthquakes": self._panel_quakes(results["quakes"]),
             "beaches": self._panel_beaches(results["beaches"]),
             "power": self._panel_power(results["wapa"]),
+            "national_park": self._panel_nps(results["nps"]),
+            "sargassum": self._panel_sargassum(),
             "travel": self._panel_travel(results["metar"], results["alerts"]),
             "events": self._panel_events(results["events"]),
             "moorings": self._panel_moorings(results["marine"], results["forecast"]),
@@ -279,7 +275,28 @@ class DashboardBuilder:
     async def _fetch_beaches(self) -> Any:
         if self.repo is None:
             return None
-        return await self.repo.get_latest_measurements("enterococcus")
+        return await self.repo.get_latest_measurements("enterococcus", island="st_john")
+
+    async def _fetch_nps(self, http: httpx.AsyncClient) -> Any:
+        if not self.settings.nps_enabled:
+            return None
+        base = "https://developer.nps.gov/api/v1"
+        headers = {"X-Api-Key": self.settings.nps_api_key}
+        code = self.settings.nps_park_code
+        park = await get_json(
+            http,
+            f"{base}/parks",
+            params={"parkCode": code, "fields": "operatingHours,weatherInfo"},
+            headers=headers,
+        )
+        alerts: Any = {}
+        try:
+            alerts = await get_json(
+                http, f"{base}/alerts", params={"parkCode": code, "limit": 10}, headers=headers
+            )
+        except Exception:  # alerts are optional
+            alerts = {}
+        return {"park": park, "alerts": alerts}
 
     async def _fetch_events(self) -> Any:
         if self.repo is None:
@@ -534,6 +551,36 @@ class DashboardBuilder:
             "updated_at": _ast(summary.get("updateTime")),
         }
 
+    def _panel_nps(self, data: Any) -> dict[str, Any]:
+        if not data:
+            return self._unavailable("NPS API key not set")
+        parks = (data.get("park") or {}).get("data") or []
+        park = parks[0] if parks else {}
+        hours = (park.get("operatingHours") or [{}])[0]
+        today = datetime.now(AST).strftime("%A").lower()
+        alerts = [
+            {"category": a.get("category"), "title": a.get("title"), "url": a.get("url")}
+            for a in ((data.get("alerts") or {}).get("data") or [])
+        ][:5]
+        return {
+            "available": True,
+            "weather_info": park.get("weatherInfo"),
+            "hours_today": (hours.get("standardHours") or {}).get(today),
+            "hours_description": hours.get("description"),
+            "alerts": alerts,
+            "url": f"https://www.nps.gov/{self.settings.nps_park_code}/",
+        }
+
+    def _panel_sargassum(self) -> dict[str, Any]:
+        # USF Sargassum Watch System composite (browser hotlinks the image).
+        return {
+            "available": True,
+            "image": "https://optics.marine.usf.edu/projects/SaWS/images/saws_FAD_composite.png",
+            "region_url": "https://optics.marine.usf.edu/cgi-bin/optics_data?roi=N_ANTILLES&unfold=menu_VAS_Carib",
+            "source_url": "https://optics.marine.usf.edu/projects/saws.html",
+            "note": "Floating-algae (Sargassum) density, past week — USF SaWS (greens/reds = more).",
+        }
+
     def _panel_travel(self, metar: Any, events: Any) -> dict[str, Any]:
         ob = metar[0] if isinstance(metar, list) and metar else {}
         obs_epoch = ob.get("obsTime")  # METAR obsTime is epoch *seconds*
@@ -556,10 +603,18 @@ class DashboardBuilder:
                 for e in events
                 if e.hazard_type in (HazardType.FERRY, HazardType.AIRPORT)
             ]
+        ferries = [
+            {
+                "name": r["name"],
+                "to_st_john": _ast(r["to_st_john"]),
+                "to_st_thomas": _ast(r["to_st_thomas"]),
+            }
+            for r in next_departures(datetime.now(AST))
+        ]
         return {
             "available": True,
             "airport": airport,
-            "ferry_routes": _FERRY_ROUTES,
+            "ferries": ferries,
             "disruptions": ferry_alerts,
         }
 

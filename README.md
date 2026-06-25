@@ -50,6 +50,9 @@ A single scale spans every hazard type:
 | **NWS Aviation Weather** (`TIST`) | STT airport conditions/closure | no¹ | METAR flight category; FAA NOTAM closure when credentials set |
 | **EPA AirNow** | Air quality / Saharan dust | yes | Activates when an AirNow key is configured |
 | **WAPA outage viewer** | Power outages | no | Undocumented outage-viewer JSON; St. John outages alert, both islands archived |
+| **NPS API** (park `viis`) | Park hours, weather blurb, alerts, events | yes | Dashboard "National Park" panel; activates with a free NPS key |
+| **USF SaWS** | Sargassum (seaweed) | no | Dashboard image panel (floating-algae density) + link to the USF regional map |
+| **Ferry timetable** (curated) | STT↔STJ next departures | no | Curated published schedule (reviewed monthly); next sailing both directions, all 3 routes |
 | **Operator overrides** (`carstorm_manual_alerts`) | Ferry, WAPA water, VITEMA/DOH, any ad-hoc | — | The reliable path for hazards with no machine feed |
 
 ¹ METAR needs no key; the optional FAA NOTAM closure check needs free FAA credentials.

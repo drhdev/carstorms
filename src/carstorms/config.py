@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # outages at or above this many customers raise an alert.
     wapa_outage_base: str = "http://www.outageviewer.viwapa.vi:7575"
     wapa_alert_min_customers: int = 25
+    # National Park Service (VIIS) — park hours, weather blurb, alerts, events.
+    # Requires a free key from https://www.nps.gov/subjects/developer/get-started.htm
+    nps_api_key: str = ""
+    nps_park_code: str = "viis"
 
     # --- Hazard detection thresholds -------------------------------------
     # A tropical cyclone whose forecast track passes within this distance of
@@ -122,6 +126,10 @@ class Settings(BaseSettings):
     @property
     def faa_notam_enabled(self) -> bool:
         return bool(self.faa_client_id and self.faa_client_secret)
+
+    @property
+    def nps_enabled(self) -> bool:
+        return bool(self.nps_api_key)
 
 
 @lru_cache
