@@ -1,210 +1,209 @@
-# carstorms
+# CarStorms — St. John (USVI) Multi-Hazard Early-Warning System
 
-A python script to get data about tropical storms and hurricanes from NHC on storms in the Caribbean.
+CarStorms is a production-grade early-warning service for **St. John, U.S. Virgin
+Islands**. It continuously watches authoritative, free hazard feeds, threads the
+data into continuous *events*, and broadcasts **escalating warnings to a public
+Telegram channel** as a threat builds and its impact on St. John becomes clearer —
+from a simple afternoon thunderstorm up to a major hurricane, plus earthquakes,
+floods, tsunami and dangerous-surf events.
 
-## Overview
+Every message:
 
-`carstorms.py` is a lightweight Python script that fetches and analyzes active tropical storms and hurricanes from the [NOAA National Hurricane Center (NHC)](https://www.nhc.noaa.gov/). It checks if any dangerous systems may affect user-defined locations (e.g., St. John USVI or St. Barths), calculates the closest approach time, and classifies the storm's severity.
+- leads with a clear **threat level** and whether it is **NEW** or an **UPDATE** to
+  an event you've already heard about,
+- explains what is happening and its bearing on St. John (distance, ETA in AST),
+- always ends with concrete **recommended actions**, and
+- attaches an **official graphic** (hurricane cone, ShakeMap, radar) when available.
 
-This tool is designed for:
-- small VPS servers 
-- integration into monitoring workflows
-- generating a structured `carstorms.json` output file
-- use as a backend data source for dashboards, APIs, or alerts
+Everything that is sent — and the events and evaluations behind it — is archived in
+**Directus** (`carstorm_*` collections) so the store doubles as a durable reference
+for all past hazards.
 
-## Features
-
-- Parses NOAA's live `nhc.kmz` feed
-- Filters storms based on wind threshold and proximity
-- Outputs detailed storm info (wind, category, explanation, distance)
-- Supports global mode (no location filtering)
-- Uses a simple, editable JSON configuration file
-- Writes structured JSON and rotating logs
-- Resource-efficient and fast
-
-## Output
-
-The script generates:
-- `carstorms.json` – JSON file with storm information
-- `carstorms.log` – log file with warnings, fetch events, and errors
-
-Example `carstorms.json` output:
-
-```json
-{
-  "name": "carstorms.py",
-  "timestamp": "2025-04-14T20:15:00+00:00",
-  "status": "ok",
-  "message": "1 active dangerous storm(s) found.",
-  "locations_monitored": ["St. John (USVI)", "St. Barths"],
-  "alert_radius_km": 150,
-  "storms": [
-    {
-      "name": "Hurricane Tammy",
-      "wind_kt": 80,
-      "wind_kmh": 148,
-      "category_description": "Category 1 of 5: Weak – Roof and tree damage, power outages likely.",
-      "locations": [
-        {
-          "location": "St. Barths",
-          "closest_time": "2025-04-15 02:00 AST",
-          "distance_km": 108
-        }
-      ]
-    }
-  ]
-}
-```
+> ⚠️ **Not a substitute for official warnings.** CarStorms aggregates public data to
+> help people act sooner. Always follow VITEMA, the National Weather Service and
+> local authorities for life-safety decisions.
 
 ---
 
-## Installation
+## Threat levels
 
-### Requirements
+A single scale spans every hazard type:
 
-- Python 3.7+
-- Packages:
-  - `requests`
-  - `geopy`
+| Level | Name | Meaning |
+|------:|------|---------|
+| 🔵 0 | Informational | Awareness only (e.g. a forecast thunderstorm, a distant system being watched). |
+| ⚪ 1 | Advisory | Minor hazard — be aware. |
+| 🟡 2 | Watch | Conditions possible — **prepare**. |
+| 🟠 3 | Warning | Conditions expected/occurring — **act**. |
+| 🔴 4 | Emergency | Severe — take protective action now / evacuate. |
+| 🟣 5 | Catastrophic | Extreme, life-threatening. |
 
-You can install requirements via pip:
+## Data sources (free, authoritative)
 
-```bash
-pip install requests geopy
-```
+| Source | Hazards | Key? | Role |
+|--------|---------|:----:|------|
+| **NWS `api.weather.gov`** (office SJU, zone VIZ001) | Severe thunderstorm, flash flood, flood, tropical storm/hurricane watch & warning, high surf, rip current, marine, tsunami | no | Primary alert backbone & local escalation (St. Thomas + St. John) |
+| **NHC `CurrentStorms.json`** | Tropical cyclones | no | Storm intensity, position, motion + forecast-cone graphic |
+| **USGS FDSN GeoJSON** | Earthquakes, tsunami flag | no | Regional seismicity + ShakeMap imagery |
+| **Open-Meteo** | Ordinary thunderstorms | no | Low-noise convective heads-up NWS won't formally warn |
+| **EPA Water Quality Portal** | Beach water quality (Enterococcus) | no | Per-beach readings archived to `carstorm_measurements`; advisory only from a fresh sample |
+| **NWS Aviation Weather** (`TIST`) | STT airport conditions/closure | no¹ | METAR flight category; FAA NOTAM closure when credentials set |
+| **EPA AirNow** | Air quality / Saharan dust | yes | Activates when an AirNow key is configured |
+| **Operator overrides** (`carstorm_manual_alerts`) | Ferry, WAPA power/water, VITEMA/DOH, any ad-hoc | — | The reliable path for hazards with no machine feed |
 
-### Clone the repository
+¹ METAR needs no key; the optional FAA NOTAM closure check needs free FAA credentials.
 
-```bash
-git clone https://github.com/drhdev/carstorms.git
-cd carstorms
-```
+> Coverage is **St. Thomas + St. John** (NWS zone VIZ001 spans both); events and
+> readings are tagged by island. See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for the
+> full extension concept, source credibility tiers, and what's deferred (live
+> sargassum, automated scrapers for ferry/WAPA/VITEMA).
+
+## How events stay coherent
+
+Observations are threaded onto a stable **`event_key`** so all data for one
+real-world threat is treated as the *same event*:
+
+- **NHC** — the storm id (`nhc:al012026`), stable across every advisory.
+- **NWS** — `office.phenomenon` from VTEC (`nws:TJSJ.FF`), so a *watch → warning →
+  cancel* lifecycle is one escalating event, not three.
+- **USGS** — the quake id (`usgs:us7000abcd`).
+
+Each event has many **updates** and each notified update has one **message**
+(`1 event → N updates → N messages`). Updates carry a `change_type`
+(`new`, `escalation`, `deescalation`, `update`, `heartbeat`, `all_clear`, `closed`)
+and an `is_new_event` flag, so progression vs. a genuinely new event is always clear.
+
+## When messages are sent (timely, not spammy)
+
+From the perspective of someone on the island — fast when it matters, quiet when it
+doesn't:
+
+- **Always:** a brand-new event, any **escalation**, and the **all-clear**.
+- **Material change:** an NWS upgrade/cancel, a cone/ETA shift, a category change, a
+  significant aftershock.
+- **Heartbeat:** while a threat is active — Warning+ every ~90 min, Watch every ~6 h.
+- **Suppressed:** a harmless thunderstorm gets a single note; unchanged data is
+  de-duplicated by hash; earthquakes are announced once (no heartbeats).
+
+The polling cadence is **adaptive**: ~3 min while a threat is active, ~15 min when calm.
+
+---
+
+## Directus data model
+
+On startup CarStorms idempotently ensures these collections exist via the Directus
+schema API (the token needs schema rights for auto-bootstrap):
+
+- **`carstorm_events`** — one row per real-world event (key, hazard type, status,
+  current/peak level, location, `affects_st_john`, timestamps).
+- **`carstorm_event_updates`** — every evaluation/state change (level, previous level,
+  `change_type`, `is_new_event`, headline, body, recommendation, distance, ETA, hash,
+  raw payload).
+- **`carstorm_messages`** — every Telegram message sent or attempted (text, image urls,
+  telegram message id, delivery status).
+- **`carstorm_source_runs`** — per-source poll telemetry (status, http status, count,
+  duration) for reliability monitoring.
+- **`carstorm_measurements`** — timestamped readings archive (beach Enterococcus,
+  AQI, …) with station, island and value — the reference dataset for water-quality
+  tests and trends.
+- **`carstorm_manual_alerts`** — operator-curated overrides read back as events
+  (the reliable channel for ferry/WAPA/VITEMA notices that have no API).
 
 ---
 
 ## Configuration
 
-All settings are defined in a single JSON file: `carstorms.config`
+All settings use the `CARSTORMS_` prefix and can come from the environment or a
+`.env` file. See [`.env.example`](.env.example). The essentials:
 
-Example:
+| Variable | Required | Purpose |
+|----------|:--------:|---------|
+| `CARSTORMS_DIRECTUS_URL` | – | Directus base URL (default `https://directus.lanxys.net`). |
+| `CARSTORMS_DIRECTUS_TOKEN` | ✅ | Static token for the archive (and schema bootstrap). |
+| `CARSTORMS_TELEGRAM_BOT_TOKEN` | ✅ | Bot token from @BotFather. |
+| `CARSTORMS_TELEGRAM_CHANNEL_ID` | ✅ | Public channel, e.g. `@carstorms_stjohn`. |
 
-```json
-{
-  "alert_radius_km": 150,
-  "wind_threshold_kt": 60,
-  "locations": {
-    "St. John (USVI)": [18.33, -64.73],
-    "St. Barths": [17.9, -62.83]
-  },
-  "webhook_url": "https://your-n8n-webhook-url"
-}
-```
-
-- `alert_radius_km`: Alert radius in kilometers for proximity checks.
-- `wind_threshold_kt`: Minimum wind speed (knots) to consider a storm dangerous.
-- `locations`: Dictionary of monitored locations (name: [lat, lon]).
-- `webhook_url`: (Optional) If set, the script will POST the output JSON to this URL after each run. This is ideal for integration with automation tools like n8n.
-
-### Webhook Integration (n8n Example)
-
-To receive alerts in [n8n](https://n8n.io/):
-1. Create a Webhook node in n8n.
-2. Set the HTTP Method to **POST**.
-3. Copy the webhook URL and paste it as `webhook_url` in your `carstorms.config`.
-4. The script will POST the full output JSON to this webhook after each run.
-
-### Global mode
-
-To track **all active systems globally**, remove or leave `"locations"` empty:
-
-```json
-"locations": {}
-```
+Location, thresholds and cadences all have sensible St. John defaults and can be
+overridden (see `.env.example`).
 
 ---
 
-## Usage
+## Running
 
-Run manually:
+### Local (uv)
 
 ```bash
-python3 carstorms.py
+uv sync --extra dev
+
+# Inspect every source and connectivity without sending anything:
+uv run carstorms check
+
+# Run one full cycle and print the messages it WOULD send (no secrets needed):
+uv run carstorms run --once --dry-run
+
+# Create the carstorm_* collections (needs a Directus admin token):
+uv run carstorms bootstrap-directus
+
+# Send a sample warning to the channel:
+uv run carstorms send-test          # add --dry-run to only print
+
+# Run the service (adaptive polling + /healthz on :8080):
+uv run carstorms run
 ```
 
-This updates:
-- `carstorms.json`
-- `carstorms.log`
+### Docker
+
+```bash
+docker compose build
+docker compose up
+# health: curl http://localhost:8080/healthz  (exposed inside the compose network)
+```
+
+### Deploy on Coolify v4
+
+1. Create a **Docker Compose** resource pointing at this repository.
+2. Set the environment variables (`CARSTORMS_DIRECTUS_TOKEN`,
+   `CARSTORMS_TELEGRAM_BOT_TOKEN`, `CARSTORMS_TELEGRAM_CHANNEL_ID`, …) in Coolify's
+   Environment UI — they are injected into [`docker-compose.yml`](docker-compose.yml).
+3. Deploy. The container's `HEALTHCHECK` (`/healthz`) drives Coolify's health status;
+   `restart: unless-stopped` keeps it running.
+
+### Telegram setup
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the token.
+2. Create a **public channel** and add the bot as an **administrator** (post rights).
+3. Set `CARSTORMS_TELEGRAM_CHANNEL_ID` to `@yourchannel`.
 
 ---
 
-## Automate with Cron & Virtual Environment (Recommended for Ubuntu/Linux)
-
-### 1. Set up a Python virtual environment in your project directory
+## Development
 
 ```bash
-cd ~/python/carstorms
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+uv run ruff check .          # lint
+uv run ruff format .         # format
+uv run mypy src              # strict type-check
+uv run pytest                # tests (fully mocked — no network)
 ```
 
-- This creates and activates a virtual environment in `~/python/carstorms/venv`.
-- Install dependencies inside the venv for isolation and portability.
+CI (GitHub Actions, [`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint,
+format-check, mypy, pytest and a Docker build on every push and PR.
 
-### 2. Run the script manually using the venv
+### Architecture
 
-```bash
-cd ~/python/carstorms
-source venv/bin/activate
-venv/bin/python carstorms.py
+```
+src/carstorms/
+  config.py            typed settings (pydantic-settings)
+  models.py            domain model: HazardObservation, HazardEvent, EventUpdate, …
+  geo.py               haversine + track projection
+  sources/             nws, nhc, usgs, openmeteo  (httpx + tenacity retries)
+  pipeline/            correlate (event threading) + decide (messaging policy)
+  content/             levels (severity scales) + recommendations (action templates)
+  directus/            async REST client, schema bootstrap, repository
+  telegram/            send client (photo→text fallback) + HTML formatting
+  health.py            /healthz server
+  app.py               orchestration + CLI (run / check / bootstrap-directus / send-test)
 ```
 
-### 3. Run the test suite using the venv
+## License
 
-```bash
-cd ~/python/carstorms
-source venv/bin/activate
-venv/bin/python -m unittest test_carstorms.py -v
-```
-
-### 4. Set up a cron job to run the script every hour at 7 minutes past the hour
-
-Edit your crontab:
-
-```bash
-crontab -e
-```
-
-Add this line and change user to your username:
-
-```cron
-7 * * * * /home/user/python/carstorms/venv/bin/python /home/user/python/carstorms/carstorms.py >> /home/user/python/carstorms/carstorms_cron.log 2>&1```
-
-- This will run the script at 7 minutes past every hour.
-- All dependencies and the script will use the virtual environment.
-- Output and errors will be appended to `carstorms_cron.log` in the project directory.
-
----
-
-## Testing & Simulation
-
-You can run the test suite to:
-- Validate all core logic and config loading.
-- Simulate a hurricane scenario and see the output structure.
-- Ensure the script works with your real `carstorms.config` (all tests use the real config).
-
-To run all tests:
-
-```bash
-python3 -m unittest test_carstorms.py -v
-```
-
-- The test suite will simulate a hurricane and show the output JSON as it would be sent to your webhook.
-- You can use this to verify your config, webhook integration, and output format.
-
----
-
-## 📄 License
-
-[GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) – Free as in freedom.
-"""
+[GPLv3](LICENSE) — free as in freedom.

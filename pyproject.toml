@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "carstorms"
+version = "1.0.0"
+description = "Multi-hazard early-warning system for St. John, USVI — broadcasts escalating, event-threaded Telegram warnings and archives them in Directus."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "drhdev" }]
+keywords = ["weather", "hurricane", "early-warning", "telegram", "usvi", "noaa"]
+
+dependencies = [
+    "httpx>=0.27",
+    "tenacity>=8.5",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+]
+
+[project.scripts]
+carstorms = "carstorms.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/carstorms"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "ASYNC"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["carstorms"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+packages = ["carstorms"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
