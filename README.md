@@ -128,6 +128,25 @@ overridden (see `.env.example`).
 
 ---
 
+## Dashboard
+
+The worker also serves a single-page **situational dashboard** for St. John at `/`
+(same port as the health check, default `8080`), with a `GET /api/dashboard.json`
+behind it. It refreshes every few minutes and shows, in one glance: active alerts +
+next-24h, the 24h/7-day forecast, **UV index**, air quality / Saharan **dust**,
+**marine** conditions (waves/swell/sea-surface temp), **tides** (Lameshur Bay),
+sun & moon, tropical outlook, recent earthquakes, beach water quality, travel
+(STT airport + ferry), curated island events, boating/mooring suitability, and a
+data-health strip. Most panels are keyless (Open-Meteo, NOAA, USGS, NHC); the
+Directus-backed panels (alerts, beaches, events, health) populate when a token is set.
+
+```bash
+uv run carstorms dashboard          # build one snapshot and print the JSON
+# When the service runs (carstorms run), open http://<host>:8080/
+```
+
+See [docs/DASHBOARD.md](docs/DASHBOARD.md) for the full panel/source breakdown.
+
 ## Running
 
 ### Local (uv)

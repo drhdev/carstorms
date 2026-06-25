@@ -1,0 +1,556 @@
+"""Build the dashboard snapshot by fanning out to every panel source.
+
+Each source is fetched concurrently and isolated: one feed failing degrades only
+its card, never the page. Fetches (raw I/O) are separated from transforms (pure)
+so the transforms are easy to test and resilient to missing data.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import httpx
+
+from carstorms.config import Settings
+from carstorms.content.recommendations import recommendation_text
+from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
+from carstorms.directus.repository import DirectusRepository
+from carstorms.geo import haversine_km
+from carstorms.logging import get_logger
+from carstorms.models import AlertLevel, HazardType
+from carstorms.sources.base import get_json, get_text
+
+log = get_logger(__name__)
+
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
+AIR_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+TIDES_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+NHC_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
+USGS_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+METAR_URL = "https://aviationweather.gov/api/data/metar"
+NDBC_URL = "https://www.ndbc.noaa.gov/data/realtime2/{buoy}.txt"
+
+_MOORINGS = [
+    "Maho Bay",
+    "Francis Bay",
+    "Waterlemon Cay",
+    "Reef Bay",
+    "Great Lameshur Bay",
+    "Salt Pond Bay",
+]
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat()
+
+
+class DashboardBuilder:
+    def __init__(self, settings: Settings, repo: DirectusRepository | None = None) -> None:
+        self.settings = settings
+        self.repo = repo
+
+    async def build(self, http: httpx.AsyncClient) -> dict[str, Any]:
+        now = datetime.now(UTC)
+        results = dict(
+            await asyncio.gather(
+                self._safe("forecast", self._fetch_forecast(http)),
+                self._safe("marine", self._fetch_marine(http)),
+                self._safe("air", self._fetch_air(http)),
+                self._safe("tides", self._fetch_tides(http, now)),
+                self._safe("tropical", self._fetch_tropical(http)),
+                self._safe("quakes", self._fetch_quakes(http, now)),
+                self._safe("metar", self._fetch_metar(http)),
+                self._safe("ndbc", self._fetch_ndbc(http, now)),
+                self._safe("alerts", self._fetch_alerts()),
+                self._safe("beaches", self._fetch_beaches()),
+                self._safe("events", self._fetch_events()),
+                self._safe("health", self._fetch_health()),
+            )
+        )
+
+        panels: dict[str, Any] = {
+            "alerts": self._panel_alerts(results["alerts"]),
+            "forecast": self._panel_forecast(results["forecast"]),
+            "uv": self._panel_uv(results["forecast"]),
+            "sun_moon": self._panel_sun_moon(results["forecast"], now),
+            "air_quality": self._panel_air(results["air"]),
+            "marine": self._panel_marine(results["marine"], results["ndbc"]),
+            "tides": self._panel_tides(results["tides"], now),
+            "tropical": self._panel_tropical(results["tropical"]),
+            "earthquakes": self._panel_quakes(results["quakes"]),
+            "beaches": self._panel_beaches(results["beaches"]),
+            "travel": self._panel_travel(results["metar"], results["alerts"]),
+            "events": self._panel_events(results["events"]),
+            "moorings": self._panel_moorings(results["marine"], results["forecast"]),
+            "data_health": self._panel_health(results["health"]),
+        }
+        return {
+            "generated_at": _iso(now),
+            "location": {
+                "name": self.settings.location_name,
+                "latitude": self.settings.latitude,
+                "longitude": self.settings.longitude,
+            },
+            "panels": panels,
+        }
+
+    async def _safe(self, name: str, coro: Any) -> tuple[str, Any]:
+        try:
+            return name, await coro
+        except Exception as exc:
+            log.warning("dashboard.fetch_error", panel=name, error=str(exc))
+            return name, None
+
+    # --- Fetchers ---------------------------------------------------------
+
+    async def _fetch_forecast(self, http: httpx.AsyncClient) -> Any:
+        return await get_json(
+            http,
+            FORECAST_URL,
+            params={
+                "latitude": self.settings.latitude,
+                "longitude": self.settings.longitude,
+                "timezone": self.settings.timezone_name,
+                "forecast_days": 7,
+                "current": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index",
+                "hourly": "temperature_2m,precipitation_probability,weather_code,wind_speed_10m",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset",
+            },
+        )
+
+    async def _fetch_marine(self, http: httpx.AsyncClient) -> Any:
+        return await get_json(
+            http,
+            MARINE_URL,
+            params={
+                "latitude": self.settings.latitude,
+                "longitude": self.settings.longitude,
+                "timezone": self.settings.timezone_name,
+                "current": "wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature",
+            },
+        )
+
+    async def _fetch_air(self, http: httpx.AsyncClient) -> Any:
+        return await get_json(
+            http,
+            AIR_URL,
+            params={
+                "latitude": self.settings.latitude,
+                "longitude": self.settings.longitude,
+                "timezone": self.settings.timezone_name,
+                "current": "us_aqi,pm2_5,pm10,dust,uv_index",
+            },
+        )
+
+    async def _fetch_tides(self, http: httpx.AsyncClient, now: datetime) -> Any:
+        return await get_json(
+            http,
+            TIDES_URL,
+            params={
+                "product": "predictions",
+                "application": "carstorms",
+                "datum": "MLLW",
+                "station": self.settings.tide_station_id,
+                "time_zone": "lst_ldt",
+                "interval": "hilo",
+                "units": "english",
+                "format": "json",
+                "begin_date": now.strftime("%Y%m%d"),
+                "range": 48,
+            },
+        )
+
+    async def _fetch_tropical(self, http: httpx.AsyncClient) -> Any:
+        return await get_json(http, NHC_URL)
+
+    async def _fetch_quakes(self, http: httpx.AsyncClient, now: datetime) -> Any:
+        return await get_json(
+            http,
+            USGS_URL,
+            params={
+                "format": "geojson",
+                "latitude": self.settings.latitude,
+                "longitude": self.settings.longitude,
+                "maxradiuskm": self.settings.earthquake_radius_km,
+                "minmagnitude": 2.5,
+                "starttime": (now - timedelta(hours=24)).isoformat(),
+                "orderby": "time",
+            },
+        )
+
+    async def _fetch_metar(self, http: httpx.AsyncClient) -> Any:
+        return await get_json(
+            http, METAR_URL, params={"ids": self.settings.airport_icao, "format": "json"}
+        )
+
+    async def _fetch_ndbc(self, http: httpx.AsyncClient, now: datetime) -> Any:
+        text = await get_text(http, NDBC_URL.format(buoy=self.settings.ndbc_buoy_id))
+        for line in text.splitlines():
+            if line.startswith("#") or not line.strip():
+                continue
+            cols = line.split()
+            if len(cols) < 15:
+                continue
+            try:
+                observed = datetime(
+                    int(cols[0]), int(cols[1]), int(cols[2]), int(cols[3]), int(cols[4]), tzinfo=UTC
+                )
+            except ValueError:
+                return None
+            age_h = (now - observed).total_seconds() / 3600
+            if age_h > self.settings.ndbc_max_age_hours:
+                return None  # stale buoy — fall back to the model
+
+            def _num(value: str) -> float | None:
+                return None if value == "MM" else float(value)
+
+            return {
+                "observed_at": _iso(observed),
+                "wave_height_m": _num(cols[8]),
+                "dominant_period_s": _num(cols[9]),
+                "mean_direction_deg": _num(cols[11]),
+                "water_temp_c": _num(cols[14]),
+            }
+        return None
+
+    async def _fetch_alerts(self) -> Any:
+        if self.repo is None:
+            return None
+        return list((await self.repo.get_active_events()).values())
+
+    async def _fetch_beaches(self) -> Any:
+        if self.repo is None:
+            return None
+        return await self.repo.get_latest_measurements("enterococcus")
+
+    async def _fetch_events(self) -> Any:
+        if self.repo is None:
+            return None
+        return await self.repo.get_notices()
+
+    async def _fetch_health(self) -> Any:
+        if self.repo is None:
+            return None
+        return await self.repo.get_latest_source_runs()
+
+    # --- Transforms (pure, None-safe) ------------------------------------
+
+    @staticmethod
+    def _unavailable(reason: str = "unavailable") -> dict[str, Any]:
+        return {"available": False, "reason": reason}
+
+    def _panel_alerts(self, events: Any) -> dict[str, Any]:
+        if events is None:
+            return self._unavailable("directus not configured")
+        cards = []
+        for ev in sorted(events, key=lambda e: int(e.current_level), reverse=True):
+            cards.append(
+                {
+                    "level": int(ev.current_level),
+                    "level_label": AlertLevel(ev.current_level).label,
+                    "emoji": AlertLevel(ev.current_level).emoji,
+                    "hazard_type": ev.hazard_type.value,
+                    "title": ev.title,
+                    "headline": ev.summary or ev.title,
+                    "island": ev.island.value if ev.island else None,
+                    "distance_km": ev.distance_km,
+                    "recommendation": recommendation_text(ev.hazard_type, ev.current_level),
+                }
+            )
+        return {"available": True, "count": len(cards), "items": cards}
+
+    def _panel_forecast(self, j: Any) -> dict[str, Any]:
+        if not j:
+            return self._unavailable()
+        cur = j.get("current", {})
+        hourly = j.get("hourly", {})
+        daily = j.get("daily", {})
+        current_time = cur.get("time", "")
+        times: list[str] = hourly.get("time", [])
+        temps = hourly.get("temperature_2m", [])
+        probs = hourly.get("precipitation_probability", [])
+        codes = hourly.get("weather_code", [])
+        winds = hourly.get("wind_speed_10m", [])
+        next24 = []
+        for i, t in enumerate(times):
+            if t < current_time:
+                continue
+            next24.append(
+                {
+                    "time": t,
+                    "temp": temps[i] if i < len(temps) else None,
+                    "precip_prob": probs[i] if i < len(probs) else None,
+                    "weather": describe_weather(codes[i] if i < len(codes) else None),
+                    "wind": winds[i] if i < len(winds) else None,
+                }
+            )
+            if len(next24) >= 24:
+                break
+        days = []
+        for i, d in enumerate(daily.get("time", [])):
+            days.append(
+                {
+                    "date": d,
+                    "weather": describe_weather((daily.get("weather_code") or [None])[i]),
+                    "temp_max": (daily.get("temperature_2m_max") or [None])[i],
+                    "temp_min": (daily.get("temperature_2m_min") or [None])[i],
+                    "precip_prob": (daily.get("precipitation_probability_max") or [None])[i],
+                }
+            )
+        return {
+            "available": True,
+            "current": {
+                "temp": cur.get("temperature_2m"),
+                "feels_like": cur.get("apparent_temperature"),
+                "humidity": cur.get("relative_humidity_2m"),
+                "weather": describe_weather(cur.get("weather_code")),
+                "wind": cur.get("wind_speed_10m"),
+                "gusts": cur.get("wind_gusts_10m"),
+                "wind_dir": cur.get("wind_direction_10m"),
+                "time": current_time,
+            },
+            "hourly": next24,
+            "daily": days,
+        }
+
+    def _panel_uv(self, j: Any) -> dict[str, Any]:
+        if not j:
+            return self._unavailable()
+        now_uv = (j.get("current") or {}).get("uv_index")
+        today_max = ((j.get("daily") or {}).get("uv_index_max") or [None])[0]
+        return {
+            "available": True,
+            "now": now_uv,
+            "today_max": today_max,
+            "risk": uv_risk(today_max if today_max is not None else now_uv),
+        }
+
+    def _panel_sun_moon(self, j: Any, now: datetime) -> dict[str, Any]:
+        daily = (j or {}).get("daily", {}) if j else {}
+        sunrise = (daily.get("sunrise") or [None])[0]
+        sunset = (daily.get("sunset") or [None])[0]
+        return {
+            "available": True,
+            "sunrise": sunrise,
+            "sunset": sunset,
+            "moon": moon_phase(now),
+        }
+
+    def _panel_air(self, j: Any) -> dict[str, Any]:
+        if not j:
+            return self._unavailable()
+        cur = j.get("current", {})
+        aqi = cur.get("us_aqi")
+        return {
+            "available": True,
+            "us_aqi": aqi,
+            "category": _aqi_category(aqi),
+            "pm2_5": cur.get("pm2_5"),
+            "pm10": cur.get("pm10"),
+            "dust": cur.get("dust"),
+            "time": cur.get("time"),
+        }
+
+    def _panel_marine(self, marine: Any, ndbc: Any) -> dict[str, Any]:
+        if not marine:
+            return self._unavailable()
+        cur = marine.get("current", {})
+        out = {
+            "available": True,
+            "wave_height_m": cur.get("wave_height"),
+            "wave_period_s": cur.get("wave_period"),
+            "wave_direction_deg": cur.get("wave_direction"),
+            "swell_height_m": cur.get("swell_wave_height"),
+            "swell_period_s": cur.get("swell_wave_period"),
+            "sea_surface_temp_c": cur.get("sea_surface_temperature"),
+            "time": cur.get("time"),
+            "source": "Open-Meteo (model)",
+        }
+        if ndbc:
+            out["observed"] = ndbc
+            out["observed_source"] = f"NDBC {self.settings.ndbc_buoy_id}"
+        return out
+
+    def _panel_tides(self, j: Any, now: datetime) -> dict[str, Any]:
+        if not j or "predictions" not in j:
+            return self._unavailable()
+        upcoming = []
+        for p in j["predictions"]:
+            upcoming.append(
+                {"time": p.get("t"), "type": p.get("type"), "height_ft": _to_float(p.get("v"))}
+            )
+        return {"available": True, "station": self.settings.tide_station_id, "events": upcoming[:6]}
+
+    def _panel_tropical(self, j: Any) -> dict[str, Any]:
+        storms = (j or {}).get("activeStorms", []) if j else []
+        items = [
+            {
+                "name": s.get("name"),
+                "classification": s.get("classification"),
+                "intensity_kt": s.get("intensity"),
+                "movement": f"{s.get('movementDir')}° at {s.get('movementSpeed')} kt",
+            }
+            for s in storms
+        ]
+        return {
+            "available": j is not None,
+            "active": items,
+            "note": "No active tropical systems."
+            if not items
+            else f"{len(items)} active system(s).",
+        }
+
+    def _panel_quakes(self, j: Any) -> dict[str, Any]:
+        if not j:
+            return self._unavailable()
+        items = []
+        for f in j.get("features", [])[:5]:
+            props = f.get("properties", {})
+            coords = (f.get("geometry") or {}).get("coordinates") or [None, None]
+            distance = None
+            if coords[0] is not None and coords[1] is not None:
+                distance = round(
+                    haversine_km(
+                        self.settings.latitude, self.settings.longitude, coords[1], coords[0]
+                    )
+                )
+            items.append(
+                {
+                    "magnitude": props.get("mag"),
+                    "place": props.get("place"),
+                    "time_ms": props.get("time"),
+                    "distance_km": distance,
+                }
+            )
+        return {"available": True, "count": len(items), "items": items}
+
+    def _panel_beaches(self, rows: Any) -> dict[str, Any]:
+        if rows is None:
+            return self._unavailable("directus not configured")
+        items = [
+            {
+                "station_name": r.get("station_name"),
+                "island": r.get("island"),
+                "value": r.get("value"),
+                "unit": r.get("unit"),
+                "status": r.get("status"),
+                "sampled_at": r.get("sampled_at"),
+            }
+            for r in rows
+        ]
+        items.sort(key=lambda x: (x["status"] != "exceedance", str(x["station_name"])))
+        return {"available": True, "count": len(items), "items": items[:40]}
+
+    def _panel_travel(self, metar: Any, events: Any) -> dict[str, Any]:
+        ob = metar[0] if isinstance(metar, list) and metar else {}
+        airport = {
+            "icao": self.settings.airport_icao,
+            "name": self.settings.airport_name,
+            "flight_category": ob.get("fltCat"),
+            "raw": ob.get("rawOb"),
+        }
+        ferry_alerts = []
+        if isinstance(events, list):
+            ferry_alerts = [
+                {"title": e.title, "level": int(e.current_level)}
+                for e in events
+                if e.hazard_type in (HazardType.FERRY, HazardType.AIRPORT)
+            ]
+        return {"available": True, "airport": airport, "disruptions": ferry_alerts}
+
+    def _panel_events(self, rows: Any) -> dict[str, Any]:
+        if rows is None:
+            return self._unavailable("no curated events")
+        items = [
+            {
+                "title": r.get("title"),
+                "body": r.get("body"),
+                "category": r.get("category"),
+                "location": r.get("location"),
+                "url": r.get("url"),
+                "starts_at": r.get("starts_at"),
+                "ends_at": r.get("ends_at"),
+            }
+            for r in rows
+        ]
+        return {"available": True, "count": len(items), "items": items}
+
+    def _panel_moorings(self, marine: Any, forecast: Any) -> dict[str, Any]:
+        wave = ((marine or {}).get("current") or {}).get("wave_height")
+        wind = ((forecast or {}).get("current") or {}).get("wind_speed_10m")
+        suitability = _mooring_suitability(_to_float(wave), _to_float(wind))
+        return {
+            "available": True,
+            "suitability": suitability,
+            "wave_height_m": wave,
+            "wind_kmh": wind,
+            "areas": _MOORINGS,
+            "note": "NPS day-use moorings; live availability is not published. Suitability is derived from swell and wind.",
+        }
+
+    def _panel_health(self, runs: Any) -> dict[str, Any]:
+        if runs is None:
+            return self._unavailable("directus not configured")
+        now = datetime.now(UTC)
+        items = []
+        for source, row in runs.items():
+            fetched = _parse_iso(row.get("fetched_at"))
+            age_min = round((now - fetched).total_seconds() / 60) if fetched else None
+            items.append(
+                {
+                    "source": source,
+                    "status": row.get("status"),
+                    "age_minutes": age_min,
+                    "observations": row.get("observations_count"),
+                }
+            )
+        return {"available": True, "items": items}
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _aqi_category(aqi: Any) -> str:
+    value = _to_float(aqi)
+    if value is None:
+        return "unknown"
+    if value <= 50:
+        return "Good"
+    if value <= 100:
+        return "Moderate"
+    if value <= 150:
+        return "Unhealthy for Sensitive Groups"
+    if value <= 200:
+        return "Unhealthy"
+    if value <= 300:
+        return "Very Unhealthy"
+    return "Hazardous"
+
+
+def _mooring_suitability(wave_m: float | None, wind_kmh: float | None) -> str:
+    if wave_m is None and wind_kmh is None:
+        return "unknown"
+    wave = wave_m or 0.0
+    wind = wind_kmh or 0.0
+    if wave <= 1.0 and wind <= 28:
+        return "good"
+    if wave <= 1.8 and wind <= 37:
+        return "marginal"
+    return "poor"

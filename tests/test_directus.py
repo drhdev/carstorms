@@ -164,4 +164,4 @@ async def test_ensure_schema_creates_when_absent(live_settings: Settings) -> Non
         async with DirectusClient(live_settings) as client:
             await ensure_schema(client, "carstorm_")
     # One create per collection in the schema.
-    assert create_collection.call_count == 6
+    assert create_collection.call_count == 7

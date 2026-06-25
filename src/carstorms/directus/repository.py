@@ -51,6 +51,7 @@ class DirectusRepository:
         self.runs = f"{prefix}source_runs"
         self.measurements = f"{prefix}measurements"
         self.manual_alerts = f"{prefix}manual_alerts"
+        self.notices = f"{prefix}notices"
 
     async def get_active_events(self) -> dict[str, HazardEvent]:
         items = await self.client.get_items(
@@ -120,6 +121,42 @@ class DirectusRepository:
         }
         created = await self.client.create_item(self.messages, record)
         return created.get("id")
+
+    async def get_latest_measurements(
+        self, metric: str, *, island: str | None = None, limit: int = 400
+    ) -> list[dict[str, object]]:
+        """Most recent reading per station for a metric (newest first)."""
+        params: dict[str, object] = {
+            "filter[metric][_eq]": metric,
+            "sort": "-sampled_at",
+            "limit": limit,
+        }
+        if island is not None:
+            params["filter[island][_eq]"] = island
+        rows = await self.client.get_items(self.measurements, params=params)
+        latest: dict[str, dict[str, object]] = {}
+        for row in rows:
+            station = str(row.get("station"))
+            if station not in latest:  # rows are newest-first
+                latest[station] = row
+        return list(latest.values())
+
+    async def get_latest_source_runs(self) -> dict[str, dict[str, object]]:
+        """Most recent poll telemetry per source, for the data-health panel."""
+        rows = await self.client.get_items(self.runs, params={"sort": "-fetched_at", "limit": 200})
+        latest: dict[str, dict[str, object]] = {}
+        for row in rows:
+            source = str(row.get("source"))
+            if source not in latest:
+                latest[source] = row
+        return latest
+
+    async def get_notices(self) -> list[dict[str, object]]:
+        """Active curated events / notices for the dashboard."""
+        return await self.client.get_items(
+            self.notices,
+            params={"filter[is_active][_eq]": "true", "sort": "starts_at", "limit": 50},
+        )
 
     async def get_manual_alerts(self) -> list[ManualAlert]:
         """Active operator-curated overrides."""

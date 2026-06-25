@@ -37,6 +37,7 @@ def build_schema(prefix: str) -> list[dict[str, Any]]:
     runs = f"{prefix}source_runs"
     measurements = f"{prefix}measurements"
     manual_alerts = f"{prefix}manual_alerts"
+    notices = f"{prefix}notices"
 
     return [
         {
@@ -168,6 +169,24 @@ def build_schema(prefix: str) -> list[dict[str, Any]]:
                 _f("is_active", "boolean"),
                 _f("expires", "timestamp"),
                 _f("created_at", "timestamp"),
+            ],
+            "relations": [],
+        },
+        {
+            "collection": notices,
+            "meta": {
+                "icon": "event",
+                "note": "Curated island events / notices for the dashboard.",
+            },
+            "fields": [
+                _f("title", "string"),
+                _f("body", "text"),
+                _f("category", "string"),  # event | notice
+                _f("location", "string"),
+                _f("url", "string"),
+                _f("starts_at", "timestamp"),
+                _f("ends_at", "timestamp"),
+                _f("is_active", "boolean"),
             ],
             "relations": [],
         },

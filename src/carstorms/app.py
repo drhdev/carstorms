@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import json
 import re
 import signal
 import time
@@ -19,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from carstorms.config import Settings, get_settings
+from carstorms.dashboard import DashboardBuilder, DashboardState, WebServer
 from carstorms.directus import DirectusClient, DirectusRepository, ensure_schema
 from carstorms.health import HealthServer, HealthState
 from carstorms.logging import configure_logging, get_logger
@@ -219,11 +221,8 @@ class Orchestrator:
 
 async def cmd_run(settings: Settings, *, once: bool, dry_run: bool) -> int:
     orch = Orchestrator(settings)
-    state = HealthState(max_age_seconds=max(settings.poll_interval_calm_seconds * 3, 900))
-    server: HealthServer | None = None
-    if not once:
-        server = HealthServer(settings.health_host, settings.health_port, state)
-        server.start()
+    health = HealthState(max_age_seconds=max(settings.poll_interval_calm_seconds * 3, 900))
+    dashboard_state = DashboardState()
 
     repo: DirectusRepository | None = None
     directus_client: DirectusClient | None = None
@@ -245,24 +244,74 @@ async def cmd_run(settings: Settings, *, once: bool, dry_run: bool) -> int:
         else:
             log.warning("run.no_telegram", message="Telegram disabled — messages will not be sent.")
 
+    server: WebServer | HealthServer | None = None
+    if not once:
+        if settings.dashboard_enabled:
+            server = WebServer(settings.health_host, settings.health_port, health, dashboard_state)
+        else:
+            server = HealthServer(settings.health_host, settings.health_port, health)
+        server.start()
+
     stop = asyncio.Event()
     _install_signal_handlers(stop)
+    refresh_task: asyncio.Task[None] | None = None
 
     try:
         async with make_http_client(settings) as http:
+            if settings.dashboard_enabled and not once:
+                builder = DashboardBuilder(settings, repo)
+                refresh_task = asyncio.create_task(
+                    _dashboard_loop(builder, http, dashboard_state, stop, settings)
+                )
             while not stop.is_set():
                 report = await orch.run_cycle(http, repo, telegram, dry_run)
-                state.mark_cycle(ok=report.ok)
+                health.mark_cycle(ok=report.ok)
                 if once:
                     break
                 await _sleep_or_stop(stop, report.next_interval_seconds)
     finally:
+        if refresh_task is not None:
+            refresh_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await refresh_task
         if telegram is not None:
             await telegram.aclose()
         if directus_client is not None:
             await directus_client.aclose()
         if server is not None:
             server.stop()
+    return 0
+
+
+async def _dashboard_loop(
+    builder: DashboardBuilder,
+    http: httpx.AsyncClient,
+    state: DashboardState,
+    stop: asyncio.Event,
+    settings: Settings,
+) -> None:
+    while not stop.is_set():
+        try:
+            state.update(await builder.build(http))
+        except Exception as exc:
+            log.warning("dashboard.refresh_failed", error=str(exc))
+        await _sleep_or_stop(stop, settings.dashboard_refresh_seconds)
+
+
+async def cmd_dashboard(settings: Settings) -> int:
+    directus_client: DirectusClient | None = None
+    repo: DirectusRepository | None = None
+    if settings.directus_enabled:
+        directus_client = DirectusClient(settings)
+        repo = DirectusRepository(directus_client, settings.directus_collection_prefix)
+    builder = DashboardBuilder(settings, repo)
+    try:
+        async with make_http_client(settings) as http:
+            snapshot = await builder.build(http)
+    finally:
+        if directus_client is not None:
+            await directus_client.aclose()
+    print(json.dumps(snapshot, indent=2, default=str))
     return 0
 
 
@@ -385,6 +434,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("bootstrap-directus", help="Create the carstorm_* collections and exit.")
     sub.add_parser("check", help="Validate config and source/Directus/Telegram connectivity.")
+    sub.add_parser("dashboard", help="Build the dashboard snapshot once and print it.")
 
     test = sub.add_parser("send-test", help="Send a sample warning to the channel.")
     test.add_argument("--dry-run", action="store_true", help="Print instead of sending.")
@@ -402,6 +452,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(cmd_bootstrap(settings))
     if args.command == "check":
         return asyncio.run(cmd_check(settings))
+    if args.command == "dashboard":
+        return asyncio.run(cmd_dashboard(settings))
     if args.command == "send-test":
         return asyncio.run(cmd_send_test(settings, dry_run=args.dry_run))
     return 1

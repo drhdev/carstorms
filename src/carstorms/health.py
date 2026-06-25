@@ -30,17 +30,21 @@ class HealthState:
             self._last_cycle_ok = ok
             self._cycles += 1
 
+    def _is_healthy_locked(self) -> bool:
+        """Compute health while the caller already holds the lock (non-reentrant)."""
+        if self._last_cycle_at is None:
+            # Allow a grace period after startup before the first cycle lands.
+            return time.time() - self._started_at < self._max_age
+        return time.time() - self._last_cycle_at < self._max_age
+
     def is_healthy(self) -> bool:
         with self._lock:
-            if self._last_cycle_at is None:
-                # Allow a grace period after startup before the first cycle lands.
-                return time.time() - self._started_at < self._max_age
-            return time.time() - self._last_cycle_at < self._max_age
+            return self._is_healthy_locked()
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
-                "status": "ok" if self.is_healthy() else "stale",
+                "status": "ok" if self._is_healthy_locked() else "stale",
                 "started_at": self._started_at,
                 "last_cycle_at": self._last_cycle_at,
                 "last_cycle_ok": self._last_cycle_ok,

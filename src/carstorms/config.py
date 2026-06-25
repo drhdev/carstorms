@@ -85,6 +85,13 @@ class Settings(BaseSettings):
     telegram_channel_id: str = ""  # @channelname or -100xxxxxxxxxx
     telegram_timeout_seconds: float = 20.0
 
+    # --- Dashboard -------------------------------------------------------
+    dashboard_enabled: bool = True
+    dashboard_refresh_seconds: int = 300
+    tide_station_id: str = "9751381"  # NOAA CO-OPS Lameshur Bay, St. John
+    ndbc_buoy_id: str = "41052"  # NDBC buoy south of St. John (observed when fresh)
+    ndbc_max_age_hours: int = 6  # ignore buoy data older than this
+
     # --- Runtime ---------------------------------------------------------
     dry_run: bool = False
     health_host: str = "0.0.0.0"
