@@ -66,7 +66,7 @@ DASHBOARD_HTML = """<!doctype html>
   <div class="grid" id="trailgrid" style="margin-top:12px"></div>
   <footer>
     <div id="dh" style="margin-bottom:6px"></div>
-    CarStorms · times in St. John local time (AST) · data from NWS, NHC, USGS, Open-Meteo, EPA, NOAA · not a substitute for official warnings
+    <a href="https://stj.fyi" style="font-weight:600">stj.fyi</a> · times in St. John local time (AST) · data from NWS, NHC, USGS, Open-Meteo, EPA, NOAA · not a substitute for official warnings
   </footer>
 </main>
 <script>

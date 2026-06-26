@@ -105,9 +105,7 @@ class Settings(BaseSettings):
     health_host: str = "0.0.0.0"
     health_port: int = 8080
     http_timeout_seconds: float = 25.0
-    http_user_agent: str = (
-        "carstorms/1.0 (St. John USVI hazard warnings; +https://github.com/drhdev/carstorms)"
-    )
+    http_user_agent: str = "carstorms/1.0 (St. John USVI hazard warnings; +https://stj.fyi)"
     log_level: str = "INFO"
     log_json: bool = True
 
