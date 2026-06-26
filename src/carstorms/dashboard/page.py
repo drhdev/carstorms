@@ -283,6 +283,20 @@ function renderWifi(){
     srcFoot('Local info', null, null));
 }
 
+// Famous St. John live webcams (external pages open in a new tab).
+const WEBCAMS = [
+  {name:'Cruz Bay (live)', url:'https://www.skylinewebcams.com/en/webcam/us-virgin-islands/saint-john/cruz-bay/cruz-bay.html'},
+  {name:'Cruz Bay ferry dock', url:'https://www.cruisingearth.com/port-webcams/caribbean/st-john-us-virgin-islands/'},
+  {name:'Lovango, Windmill Bar & cays', url:'https://greatexpectationsstj.com/webcam'},
+  {name:'All St. John cams (20+)', url:'https://explorestj.com/webcams/'},
+  {name:'More live cams (WebcamTaxi)', url:'https://www.webcamtaxi.com/en/virgin-islands/saint-john.html'},
+  {name:'News of St. John cams', url:'https://newsofstjohn.com/webcams/'},
+];
+function renderWebcams(){
+  const list = WEBCAMS.map(w=>`<div class="row"><span>📷 ${link(w.name, w.url)}</span></div>`).join("");
+  return card("Webcams","St. John", list, srcFoot('Curated links', null, null));
+}
+
 function renderEvents(p){
   if(!p||!p.available||!p.items||!p.items.length) return "";  // hide when nothing curated
   return card("What's on", p.count,
@@ -352,7 +366,7 @@ async function load(){
       renderSargassum(P.sargassum), renderTropical(P.tropical), renderQuakes(P.earthquakes),
       renderBeaches(P.beaches), renderPower(P.power), renderNPS(P.national_park),
       renderTravel(P.travel), renderMoorings(P.moorings), renderWildlife(P.wildlife),
-      renderWifi(), renderEvents(P.events)
+      renderWebcams(), renderWifi(), renderEvents(P.events)
     ].join("");
     document.getElementById('dh').innerHTML = renderHealthFooter(P.data_health);
     document.getElementById('updated').textContent = 'Updated ' + fmtTime(d.generated_at) + ' AST · auto-refreshes';
