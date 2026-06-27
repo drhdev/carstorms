@@ -46,6 +46,7 @@ key/extra work; **C** = no API → curated (manual channel) or static.
 | 13 | **What's on (island events)** | Curated upcoming events/markets/closures | Curated via `carstorm_manual_alerts` (no events API exists) | **C** | manual |
 | 14 | **Boating & moorings** | NPS day-use mooring locations/rules + today's swell/wind suitability note | Static NPS reference + Open-Meteo Marine (derived) | **C/A** | 30 min |
 | 15 | **Data health** | Per-source freshness ("updated 4 min ago") | `carstorm_source_runs` (Directus) | **A** | each load |
+| 16 | **Today's activity guide** | Morning/afternoon ranked St. John activities with 0–100 scores, reasons, confidence and safety overrides | Derived from forecast, marine, UV, AQI, Sargassum, beach and alert panels | **A** | each load |
 
 **Notes from research**
 - **Open-Meteo** alone supplies panels 2–6 and 8 with **no API key** (forecast incl.
@@ -109,6 +110,24 @@ dust/AQI), `tides.py` (CO-OPS 9751381), `astronomy.py` (sun/moon). These are rea
 ---
 
 ## 4. What I'd add beyond the obvious (and why)
+
+### Explainable activity scoring
+
+The activity guide is a deterministic decision model, not generated prose. Each
+activity defines factor weights totaling 100 percent. For example, snorkeling puts
+most weight on wave state, wind and inferred water clarity; sailing rewards a useful
+breeze; tennis and hiking prioritize rain, heat stress, UV and humidity. Continuous
+piecewise-linear curves convert each input to 0–100 before the weighted average is
+calculated. The JSON includes every component's weight and suitability, making an
+individual score auditable.
+
+Safety rules run after that average and can only reduce a score. Forecast lightning
+caps exposed activities at 10–15, an active marine/surf alert caps water activities
+at 20, and activity-specific limits cover rough seas, long-period swell, strong
+gusts, and monitored beach-water advisories. Missing inputs use conservative neutral
+values and lower the displayed confidence instead of silently becoming perfect
+conditions. Score bands are: 85–100 excellent, 70–84 good, 55–69 fair, 35–54 poor,
+and 0–34 avoid.
 
 - **UV index** — St. John sun is intense; a clear "UV 11 — burn risk in ~10 min" card
   is high-value and keyless.

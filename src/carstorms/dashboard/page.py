@@ -47,6 +47,28 @@ DASHBOARD_HTML = """<!doctype html>
   .status-good{color:var(--good)} .status-warn{color:var(--warn)} .status-bad{color:var(--bad)}
   footer { color:var(--muted); font-size:12px; text-align:center; padding:8px; }
   .foot { margin-top:8px; padding-top:6px; border-top:1px solid var(--line); font-size:11px; color:var(--muted); }
+  .activity-card { grid-column:1 / -1; padding:16px; }
+  .activity-periods { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .activity-period { background:var(--card2); border:1px solid var(--line); border-radius:11px; padding:12px; }
+  .activity-period h3 { margin:0; font-size:17px; }
+  .activity-summary { color:var(--muted); font-size:12px; margin:2px 0 10px; }
+  .activity-label { margin:9px 0 5px; color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .activity-item { display:grid; grid-template-columns:minmax(125px,1fr) 42px; gap:3px 9px; padding:6px 0; border-bottom:1px solid var(--line); }
+  .activity-item:last-child { border-bottom:0; }
+  .activity-score { font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+  .activity-reason { grid-column:1 / -1; color:var(--muted); font-size:12px; }
+  .score-excellent,.score-good { color:var(--good); }
+  .score-fair { color:var(--warn); }
+  .score-poor,.score-avoid { color:var(--bad); }
+  .safety-note { margin-top:9px; border-left:3px solid var(--warn); padding:5px 8px; background:#2a2940; border-radius:4px; font-size:12px; }
+  .score-details { margin-top:10px; color:var(--muted); font-size:12px; }
+  .score-details summary { cursor:pointer; color:#b9c8e3; }
+  .score-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:3px 12px; margin-top:7px; }
+  @media (max-width:650px) {
+    .activity-periods { grid-template-columns:1fr; }
+    .activity-card > h2 { flex-wrap:wrap; gap:2px 10px; }
+    .activity-card > h2 > span:last-child { flex-basis:100%; }
+  }
   a, .foot a { color:#7db1ff; text-decoration:none; }
   a:hover, .foot a:hover { text-decoration:underline; }
   #map { height:300px; border-radius:8px; margin-bottom:8px; }
@@ -142,6 +164,37 @@ function renderDaily(p){
     `${num(Math.round(d.temp_max))}° / ${num(Math.round(d.temp_min))}° · 🌧️${num(d.precip_prob,'%')}`)).join("");
   return card("7-day outlook","🌧️% = rain chance", days,
     srcFoot('Open-Meteo / NWS', LINKS.forecast, (p.daily[0]||{}).date));
+}
+
+function activityItem(a){
+  const why=(a.reasons||[]).join(' · ');
+  return `<div class="activity-item"><span>${a.emoji||''} ${a.name||''}</span>
+    <span class="activity-score score-${a.rating||'fair'}">${num(a.score)}</span>
+    <span class="activity-reason">${why}</span></div>`;
+}
+
+function renderActivities(p){
+  if(!p||!p.available) return card("Today's activity guide","offline",`<div class="muted">${(p&&p.reason)||'Forecast inputs unavailable'}</div>`);
+  const periods=(p.periods||[]).map(x=>{
+    const best=(x.best||[]).map(activityItem).join('');
+    const caution=(x.caution||[]).length ? (x.caution||[]).map(activityItem).join('')
+      : '<div class="status-good" style="font-size:13px">No activity falls below the 55-point caution threshold.</div>';
+    const all=(x.all||[]).map(a=>`<div class="row"><span>${a.emoji||''} ${a.name||''}</span><span class="score-${a.rating||'fair'}">${a.score} · ${a.rating}</span></div>`).join('');
+    return `<section class="activity-period">
+      <h3>${x.label} <span class="muted" style="font-size:12px;font-weight:400">${x.time} · ${x.confidence} confidence</span></h3>
+      <div class="activity-summary">${x.summary||''}</div>
+      <div class="activity-label">Best use of this period</div>${best}
+      <div class="activity-label">Not a good time for</div>${caution}
+      ${x.safety_note? `<div class="safety-note">⚠️ ${x.safety_note}</div>`:''}
+      <details class="score-details"><summary>All activity scores</summary><div class="score-grid">${all}</div></details>
+    </section>`;
+  }).join('');
+  return `<div class="card activity-card"><h2><span>Today's activity guide</span><span class="muted">0 worst · 100 ideal</span></h2>
+    <div class="activity-periods">${periods}</div>
+    <details class="score-details"><summary>How the scores are calculated</summary>
+      <div style="margin-top:6px">${(p.methodology||[]).map(x=>`<div>• ${x}</div>`).join('')}</div>
+    </details>
+    <div class="foot">${p.method||''} Forecast guidance, not a substitute for beach flags, NPS notices, or captain/dive-operator judgment.</div></div>`;
 }
 
 function renderUV(p){
@@ -361,7 +414,7 @@ async function load(){
     renderAlerts(P.alerts);
     document.getElementById('grid').innerHTML = [
       renderClock(),
-      renderForecast(P.forecast), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
+      renderForecast(P.forecast), renderActivities(P.activities), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
       renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
       renderSargassum(P.sargassum), renderTropical(P.tropical), renderQuakes(P.earthquakes),
       renderBeaches(P.beaches), renderPower(P.power), renderNPS(P.national_park),

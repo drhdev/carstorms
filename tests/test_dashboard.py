@@ -8,6 +8,7 @@ import httpx
 import respx
 
 from carstorms.config import Settings
+from carstorms.dashboard.advisory import build_activity_advisory
 from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
 from carstorms.dashboard.builder import (
     FORECAST_URL,
@@ -57,6 +58,89 @@ def test_aqi_category() -> None:
     assert _aqi_category(75) == "Moderate"
     assert _aqi_category(160) == "Unhealthy"
     assert _aqi_category(None) == "unknown"
+
+
+def _activity_inputs(*, storm: bool = False, wave: float = 0.4, wave_period: float = 8.0) -> tuple[dict, dict]:
+    times = [f"2026-06-25T{hour:02d}:00" for hour in range(6, 18)]
+    count = len(times)
+    forecast = {
+        "hourly": {
+            "time": times,
+            "temperature_2m": [27.0] * count,
+            "apparent_temperature": [29.0] * count,
+            "relative_humidity_2m": [68.0] * count,
+            "precipitation_probability": [15.0] * count,
+            "precipitation": [0.0] * count,
+            "weather_code": ([95] * count) if storm else ([1] * count),
+            "wind_speed_10m": [10.0] * count,
+            "wind_gusts_10m": [18.0] * count,
+            "uv_index": [4.0] * count,
+            "visibility": [24000.0] * count,
+        }
+    }
+    marine = {
+        "hourly": {
+            "time": times,
+            "wave_height": [wave] * count,
+            "wave_period": [wave_period] * count,
+            "swell_wave_height": [wave] * count,
+            "swell_wave_period": [9.0] * count,
+            "sea_surface_temperature": [28.0] * count,
+        }
+    }
+    return forecast, marine
+
+
+def _advisory(*, storm: bool = False, wave: float = 0.4, wave_period: float = 8.0, sargassum: str = "low") -> dict:
+    forecast, marine = _activity_inputs(storm=storm, wave=wave, wave_period=wave_period)
+    return build_activity_advisory(
+        forecast,
+        marine,
+        {"available": True, "us_aqi": 28},
+        {"available": True, "level": sargassum},
+        {"available": True, "items": []},
+        {"available": True, "items": []},
+        datetime(2026, 6, 25, 12, tzinfo=UTC),
+    )
+
+
+def _score(panel: dict, key: str, period: int = 0) -> int:
+    return next(item["score"] for item in panel["periods"][period]["all"] if item["key"] == key)
+
+
+def test_activity_advisory_scores_calm_day_and_period_meals() -> None:
+    panel = _advisory()
+    assert panel["available"] is True
+    assert len(panel["periods"]) == 2
+    assert _score(panel, "snorkel") >= 80
+    names = [[item["name"] for item in period["all"]] for period in panel["periods"]]
+    assert "Long breakfast outdoors" in names[0]
+    assert "Long lunch / early dinner" in names[1]
+    assert panel["methodology"]
+
+
+def test_activity_advisory_lightning_applies_safety_caps() -> None:
+    panel = _advisory(storm=True)
+    assert _score(panel, "hike") <= 10
+    assert _score(panel, "snorkel") <= 15
+    assert _score(panel, "wellness") > _score(panel, "hike")
+    assert "Thunderstorms" in panel["periods"][0]["safety_note"]
+
+
+def test_activity_advisory_rough_seas_and_sargassum_are_specific() -> None:
+    calm = _advisory()
+    rough = _advisory(wave=1.8, sargassum="elevated")
+    assert _score(rough, "snorkel") <= 25
+    assert _score(rough, "swim") <= 20
+    assert _score(rough, "beach") < _score(calm, "beach")
+    assert _score(rough, "tennis") == _score(calm, "tennis")
+
+
+def test_activity_advisory_long_period_swell_reduces_water_scores() -> None:
+    short_period = _advisory(wave=0.8, wave_period=7)
+    long_period = _advisory(wave=0.8, wave_period=14)
+    assert _score(long_period, "snorkel") < _score(short_period, "snorkel")
+    assert "@ 14s" in long_period["periods"][0]["summary"]
 
 
 # --- Panel transforms (pure, None-safe) ------------------------------------

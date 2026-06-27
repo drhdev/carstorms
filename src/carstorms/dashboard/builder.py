@@ -16,6 +16,7 @@ import httpx
 from carstorms.config import Settings
 from carstorms.content.ferry import next_departures
 from carstorms.content.recommendations import recommendation_text
+from carstorms.dashboard.advisory import build_activity_advisory
 from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
 from carstorms.directus.repository import DirectusRepository
 from carstorms.geo import haversine_km, usvi_island
@@ -136,6 +137,15 @@ class DashboardBuilder:
             "moorings": self._panel_moorings(results["marine"], results["forecast"]),
             "data_health": self._panel_health(results["health"]),
         }
+        panels["activities"] = build_activity_advisory(
+            results["forecast"],
+            results["marine"],
+            panels["air_quality"],
+            panels["sargassum"],
+            panels["beaches"],
+            panels["alerts"],
+            now,
+        )
         return {
             "generated_at": _ast(now),
             "location": {
@@ -165,7 +175,7 @@ class DashboardBuilder:
                 "timezone": self.settings.timezone_name,
                 "forecast_days": 7,
                 "current": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index",
-                "hourly": "temperature_2m,precipitation_probability,weather_code,wind_speed_10m",
+                "hourly": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,uv_index,visibility",
                 "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset",
             },
         )
@@ -179,6 +189,8 @@ class DashboardBuilder:
                 "longitude": self.settings.longitude,
                 "timezone": self.settings.timezone_name,
                 "current": "wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature",
+                "hourly": "wave_height,wave_period,swell_wave_height,swell_wave_period,sea_surface_temperature",
+                "forecast_days": 2,
             },
         )
 
