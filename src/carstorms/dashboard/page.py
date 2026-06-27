@@ -64,6 +64,20 @@ DASHBOARD_HTML = """<!doctype html>
   .score-details { margin-top:10px; color:var(--muted); font-size:12px; }
   .score-details summary { cursor:pointer; color:#b9c8e3; }
   .score-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:3px 12px; margin-top:7px; }
+  .power-timeline { margin-top:9px; padding-top:8px; border-top:1px solid var(--line); }
+  .power-line { display:grid; grid-template-columns:minmax(100px,auto) minmax(0,1fr); gap:8px; padding:3px 0; font-size:13px; }
+  .power-line > span:last-child { text-align:right; overflow-wrap:anywhere; }
+  .wind-meter { height:8px; border-radius:999px; background:#273754; overflow:hidden; margin:8px 0; }
+  .wind-meter > span { display:block; height:100%; border-radius:999px; }
+  .band-green { color:var(--good); } .band-yellow { color:var(--warn); } .band-red { color:var(--bad); }
+  .fill-green { background:var(--good); } .fill-yellow { background:var(--warn); } .fill-red { background:var(--bad); }
+  .restaurant-card { grid-column:1 / -1; }
+  .restaurant-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); gap:8px; }
+  .restaurant-item { background:var(--card2); border:1px solid var(--line); border-radius:9px; padding:10px; }
+  .restaurant-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .restaurant-source { color:var(--muted); font-size:11px; margin-top:5px; }
+  .gmp-attribution { color:#fff; font:400 12px Roboto,Arial,sans-serif; letter-spacing:normal; white-space:nowrap; }
+  .disruption-note { border-left:3px solid var(--warn); background:#2a2940; padding:7px 9px; border-radius:4px; margin-bottom:9px; font-size:12px; }
   @media (max-width:650px) {
     .activity-periods { grid-template-columns:1fr; }
     .activity-card > h2 { flex-wrap:wrap; gap:2px 10px; }
@@ -100,6 +114,8 @@ const fmtDay = s => { if(!s) return "—"; const d=new Date(s);
   return isNaN(d)? s : d.toLocaleDateString('en-US',{weekday:'short',timeZone:TZ}); };
 const fmtDT = s => { if(!s) return "—"; const d=new Date(s);
   return isNaN(d)? s : d.toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:TZ}); };
+const fmtExact = s => { if(!s) return "—"; const d=new Date(s);
+  return isNaN(d)? s : d.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:TZ,timeZoneName:'short'}); };
 const num = (v,u="") => (v===null||v===undefined||v==="")? "—" : v+u;
 const card = (title, extra, body, foot) =>
   `<div class="card"><h2><span>${title}</span><span class="muted">${extra||""}</span></h2>${body}${foot||""}</div>`;
@@ -156,6 +172,26 @@ function renderForecast(p){
      <div class="muted">${(c.weather||{}).label||""} · feels ${num(Math.round(c.feels_like))}° · wind ${num(Math.round(c.wind))} km/h</div>
      <div class="hstrip" style="margin-top:8px">${strip}</div>`,
     srcFoot('Open-Meteo / NWS', LINKS.forecast, c.time));
+}
+
+function windAssessment(x){
+  if(!x) return '';
+  return `<div style="margin-top:8px">
+    <div class="row"><span>${x.label||''}</span><span class="band-${x.band||'green'}" style="font-weight:700">${num(x.severity)}/100</span></div>
+    <div class="wind-meter"><span class="fill-${x.band||'green'}" style="width:${Math.max(0,Math.min(100,x.severity||0))}%"></span></div>
+    <div class="muted" style="font-size:12px">${num(x.speed_kmh,' km/h')} sustained · ${num(x.gust_kmh,' km/h')} gusts · ${x.direction||'unknown'} ${x.direction_deg!=null?'('+x.direction_deg+'°)':''}</div>
+    <div style="font-size:12px;margin-top:4px">${x.advice||''}</div>
+    ${x.alert_note?`<div class="status-warn" style="font-size:12px;margin-top:3px">⚠ ${x.alert_note}</div>`:''}
+  </div>`;
+}
+
+function renderWind(p){
+  if(!p||!p.available) return card("Wind & outdoor impact","offline",`<div class="muted">${(p&&p.reason)||''}</div>`);
+  const periods=(p.periods||[]).map(x=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+    <div style="display:flex;justify-content:space-between;gap:8px"><span>${x.label} <span class="muted">${x.time}</span></span><span class="band-${x.band}" style="font-weight:700">${x.severity}/100 · ${x.band}</span></div>
+    <div class="muted" style="font-size:12px">${num(x.speed_kmh,' km/h')} · gust ${num(x.gust_kmh,' km/h')} · ${x.direction}</div></div>`).join('');
+  return card("Wind & outdoor impact",fmtTime(p.time),windAssessment(p.current)+periods,
+    `<div class="foot">${p.method||''}</div>`);
 }
 
 function renderDaily(p){
@@ -284,11 +320,53 @@ function renderBeaches(p){
 function renderPower(p){
   if(!p||!p.available) return card("Power (WAPA)","offline","");
   const sj=p.st_john||{}, st=p.st_thomas||{};
+  const t=p.st_john_timeline||{};
+  const duration = d => d? `${num(d.hours)} hours · ${num(d.days)} days · ${num(d.weeks)} weeks` : '—';
+  const pline = (k,v) => `<div class="power-line"><span class="muted">${k}</span><span>${v}</span></div>`;
+  let timeline = '<div class="power-timeline"><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">St. John continuity</div>';
+  if(t.available){
+    const ongoing=t.status==='outage';
+    const sinceLabel=t.since_precision==='history_start'?'At least since':(ongoing?'Ongoing since':'Uninterrupted since');
+    timeline += pline(sinceLabel,fmtExact(t.since));
+    timeline += pline(ongoing?'Ongoing duration':'Uninterrupted for',duration(t.duration));
+    if(t.last_outage){
+      timeline += pline('Last failure',duration(t.last_outage.duration));
+      timeline += pline('Failure began',`${fmtExact(t.last_outage.start)}${t.last_outage.start_precision==='reported'?'':' (first confirmed)'}`);
+      timeline += pline('Power restored',`${fmtExact(t.last_outage.end)}${t.last_outage.end_precision==='reported'?'':' (first confirmed)'}`);
+    } else if(!ongoing) {
+      timeline += '<div class="muted" style="font-size:12px;margin-top:4px">No completed St. John failure exists in the available archive.</div>';
+    }
+  } else {
+    timeline += `<div class="muted" style="font-size:12px;margin-top:4px">${t.reason||'Historical continuity unavailable.'}</div>`;
+  }
+  timeline += '</div>';
   return card("Power (WAPA)", p.updated_at? fmtTime(p.updated_at):"",
     `${row("St. John", `<span class="${sj.out>0?'status-bad':'status-good'}">${num(sj.out)} out</span>${sj.count? ' · '+sj.count+' outage(s)':''}`)}
      ${row("St. Thomas", `<span class="${st.out>0?'status-warn':'status-good'}">${num(st.out)} out</span>${st.count? ' · '+st.count+' outage(s)':''}`)}
-     ${row("Territory", `${num(p.territory_out)} out of ${num(p.customers_served)}`)}`,
+     ${row("Territory", `${num(p.territory_out)} out of ${num(p.customers_served)}`)}${timeline}`,
     srcFoot('WAPA outage viewer', LINKS.wapa, p.updated_at));
+}
+
+function renderRestaurants(p){
+  if(!p||!p.available) return card("Restaurants today","offline","");
+  const d=p.disruption||{};
+  const warning=(d.notes||[]).length? `<div class="disruption-note band-${d.level||'yellow'}">⚠ ${(d.notes||[]).join(' ')}</div>`:'';
+  const items=(p.items||[]).map(x=>{
+    const statusClass=['open_now','verified_update'].includes(x.status)?'status-good':(['closed','closed_today','scheduled_closed_today'].includes(x.status)?'status-bad':'status-warn');
+    const checked=x.checked_at? ` · checked ${fmtDT(x.checked_at)}`:(x.schedule_reviewed_on?` · schedule reviewed ${x.schedule_reviewed_on}`:'');
+    const contact=`${x.official_url?link('official',x.official_url):''}${x.maps_url?' · '+link('map',x.maps_url):''}${x.phone?' · <a href="tel:'+x.phone+'">'+x.phone+'</a>':''}`;
+    const gmp=x.source_tier==='google_current_hours'?'<span class="gmp-attribution" translate="no">Google Maps</span> ':'';
+    const attrs=(x.attributions||[]).map(a=>a.providerUri?link(a.provider||'data provider',a.providerUri):(a.provider||'')).filter(Boolean).join(' · ');
+    return `<div class="restaurant-item">
+      <div class="restaurant-head"><span><strong>${x.name}</strong><br><span class="muted" style="font-size:12px">${x.area||''}</span></span><span class="${statusClass}" style="text-align:right;font-weight:700;font-size:12px">${x.status_label||''}</span></div>
+      <div style="margin-top:7px">Today: <strong>${x.hours_today||'—'}</strong>${x.special_hours?' <span class="pill status-warn">special hours</span>':''}</div>
+      ${x.note?`<div class="muted" style="font-size:12px;margin-top:4px">${x.note}</div>`:''}
+      <div class="restaurant-source">${gmp}${x.source_label||''}${checked}${attrs?'<br>Data: '+attrs:''}<br>${contact}</div>
+    </div>`;
+  }).join('');
+  return `<div class="card restaurant-card"><h2><span>Popular restaurants today</span><span class="muted">St. John local time</span></h2>${warning}
+    <div class="restaurant-grid">${items}</div>
+    <div class="foot">${p.policy||''}${p.live_source_available?'':' Add CARSTORMS_GOOGLE_PLACES_API_KEY for current/special Google hours.'}</div></div>`;
 }
 
 function renderTravel(p){
@@ -414,10 +492,10 @@ async function load(){
     renderAlerts(P.alerts);
     document.getElementById('grid').innerHTML = [
       renderClock(),
-      renderForecast(P.forecast), renderActivities(P.activities), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
+      renderForecast(P.forecast), renderWind(P.wind), renderActivities(P.activities), renderUV(P.uv), renderSunMoon(P.sun_moon), renderDaily(P.forecast),
       renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
       renderSargassum(P.sargassum), renderTropical(P.tropical), renderQuakes(P.earthquakes),
-      renderBeaches(P.beaches), renderPower(P.power), renderNPS(P.national_park),
+      renderBeaches(P.beaches), renderPower(P.power), renderRestaurants(P.restaurants), renderNPS(P.national_park),
       renderTravel(P.travel), renderMoorings(P.moorings), renderWildlife(P.wildlife),
       renderWebcams(), renderWifi(), renderEvents(P.events)
     ].join("");

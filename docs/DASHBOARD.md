@@ -47,6 +47,8 @@ key/extra work; **C** = no API → curated (manual channel) or static.
 | 14 | **Boating & moorings** | NPS day-use mooring locations/rules + today's swell/wind suitability note | Static NPS reference + Open-Meteo Marine (derived) | **C/A** | 30 min |
 | 15 | **Data health** | Per-source freshness ("updated 4 min ago") | `carstorm_source_runs` (Directus) | **A** | each load |
 | 16 | **Today's activity guide** | Morning/afternoon ranked St. John activities with 0–100 scores, reasons, confidence and safety overrides | Derived from forecast, marine, UV, AQI, Sargassum, beach and alert panels | **A** | each load |
+| 17 | **Wind & outdoor impact** | Current/morning/afternoon/evening direction, sustained speed, gusts and green/yellow/red 0–100 severity | Open-Meteo hourly + active CarStorms wind alerts | **A** | each load |
+| 18 | **Restaurants today** | Today's hours/open status for popular venues, source confidence and storm/power disruption warning | Google Places current/special hours; official sites; verified Directus notices | **A/B** | 5–30 min |
 
 **Notes from research**
 - **Open-Meteo** alone supplies panels 2–6 and 8 with **no API key** (forecast incl.

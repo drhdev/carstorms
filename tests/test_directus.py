@@ -152,6 +152,27 @@ async def test_archive_measurements_dedups(live_settings: Settings) -> None:
     assert post.call_count == 1
 
 
+async def test_get_measurement_history_filters_power_by_island(
+    live_settings: Settings,
+) -> None:
+    response = {"data": [{"value": 0, "sampled_at": "2026-06-25T10:00:00-04:00"}]}
+    with respx.mock:
+        route = respx.get(f"{BASE}/items/carstorm_measurements").mock(
+            return_value=httpx.Response(200, json=response)
+        )
+        async with DirectusClient(live_settings) as client:
+            repo = DirectusRepository(client, "carstorm_")
+            rows = await repo.get_measurement_history(
+                "outage_customers", island="st_john", source="wapa"
+            )
+    assert rows == response["data"]
+    query = route.calls[0].request.url.params
+    assert query["filter[metric][_eq]"] == "outage_customers"
+    assert query["filter[island][_eq]"] == "st_john"
+    assert query["filter[source][_eq]"] == "wapa"
+    assert query["sort"] == "-sampled_at"
+
+
 async def test_ensure_schema_creates_when_absent(live_settings: Settings) -> None:
     with respx.mock:
         respx.get(url__regex=rf"{BASE}/collections/.+").mock(return_value=httpx.Response(404))

@@ -215,20 +215,21 @@ async def test_manual_alerts_become_observations(live_settings: Settings) -> Non
 # --- WAPA power outages -----------------------------------------------------
 
 
-def _outage(lat: float, lng: float, out: int) -> dict:
+def _outage(lat: float, lng: float, out: int, start: str | None = None) -> dict:
     return {
         "outageRecID": f"x-{lat}-{lng}",
         "outagePoint": {"lat": lat, "lng": lng},
         "customersOutNow": out,
         "streetsAffected": ["Some Road"],
         "crewAssigned": False,
+        "outageStartTime": start,
     }
 
 
 async def test_wapa_aggregates_by_island_and_alerts_st_john(settings: Settings) -> None:
     base = settings.wapa_outage_base.rstrip("/")
     outages = [
-        _outage(18.33, -64.74, 30),  # St. John -> 30 out (>= threshold -> alert)
+        _outage(18.33, -64.74, 30, "2026-06-25T07:15:00-04:00"),  # St. John
         _outage(18.34, -64.93, 8),  # St. Thomas -> archived only
         _outage(17.74, -64.72, 7),  # St. Croix -> ignored
     ]
@@ -246,6 +247,10 @@ async def test_wapa_aggregates_by_island_and_alerts_st_john(settings: Settings) 
     by_island = {m.island: m.value for m in result.measurements}
     assert by_island[Island.ST_JOHN] == 30
     assert by_island[Island.ST_THOMAS] == 8  # St. Croix excluded
+    by_station = {m.island: m.station for m in result.measurements}
+    assert by_station[Island.ST_JOHN] == "st_john"  # prevents cross-island dedup
+    sj_measurement = next(m for m in result.measurements if m.island is Island.ST_JOHN)
+    assert sj_measurement.raw["active_outage_starts"] == ["2026-06-25T07:15:00-04:00"]
     assert len(result.observations) == 1
     obs = result.observations[0]
     assert obs.hazard_type is HazardType.POWER_OUTAGE

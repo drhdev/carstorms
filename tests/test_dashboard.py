@@ -324,6 +324,69 @@ def test_power_panel_aggregates_by_island(settings: Settings) -> None:
     assert panel["updated_at"].endswith("-04:00")
 
 
+def test_power_panel_reports_exact_ongoing_duration(settings: Settings) -> None:
+    builder = DashboardBuilder(settings)
+    data = {
+        "outages": [
+            {
+                "outagePoint": {"lat": 18.33, "lng": -64.74},
+                "customersOutNow": 20,
+                "outageStartTime": "2026-06-25T08:00:00-04:00",
+            }
+        ],
+        "summary": {"updateTime": "2026-06-25T11:55:00-04:00"},
+    }
+    panel = builder._panel_power(data, None, datetime(2026, 6, 25, 16, tzinfo=UTC))
+    timeline = panel["st_john_timeline"]
+    assert timeline["available"] is True
+    assert timeline["status"] == "outage"
+    assert timeline["since"] == "2026-06-25T08:00:00-04:00"
+    assert timeline["since_precision"] == "reported"
+    assert timeline["duration"] == {"hours": 4.0, "days": 0.17, "weeks": 0.02}
+
+
+def test_power_panel_reports_uninterrupted_since_and_last_failure(settings: Settings) -> None:
+    builder = DashboardBuilder(settings)
+    history = [
+        {
+            "value": 0,
+            "status": "ok",
+            "sampled_at": "2026-06-25T11:00:00-04:00",
+            "raw": {},
+        },
+        {
+            "value": 12,
+            "status": "outage",
+            "sampled_at": "2026-06-25T09:00:00-04:00",
+            "raw": {"active_outage_starts": ["2026-06-25T07:45:00-04:00"]},
+        },
+        {
+            "value": 0,
+            "status": "ok",
+            "sampled_at": "2026-06-25T10:00:00-04:00",
+            "raw": {},
+        },
+        {
+            "value": 12,
+            "status": "outage",
+            "sampled_at": "2026-06-25T08:00:00-04:00",
+            "raw": {"active_outage_starts": ["2026-06-25T07:45:00-04:00"]},
+        },
+    ]
+    data = {
+        "outages": [],
+        "summary": {"updateTime": "2026-06-25T12:00:00-04:00"},
+    }
+    panel = builder._panel_power(data, history, datetime(2026, 6, 25, 16, tzinfo=UTC))
+    timeline = panel["st_john_timeline"]
+    assert timeline["status"] == "uninterrupted"
+    assert timeline["since"] == "2026-06-25T10:00:00-04:00"
+    assert timeline["duration"]["hours"] == 2.0
+    assert timeline["last_outage"]["duration"]["hours"] == 2.2
+    assert timeline["last_outage"]["start_precision"] == "reported"
+    assert timeline["last_outage"]["end_precision"] == "first_confirmed"
+
+
 # --- build() resilience -----------------------------------------------------
 
 

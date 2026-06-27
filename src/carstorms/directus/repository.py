@@ -147,6 +147,25 @@ class DirectusRepository:
                 latest[station] = row
         return list(latest.values())
 
+    async def get_measurement_history(
+        self,
+        metric: str,
+        *,
+        island: str,
+        source: str | None = None,
+        limit: int = 10000,
+    ) -> list[dict[str, object]]:
+        """Newest archived readings for one island, used to derive state transitions."""
+        params: dict[str, object] = {
+            "filter[metric][_eq]": metric,
+            "filter[island][_eq]": island,
+            "sort": "-sampled_at",
+            "limit": limit,
+        }
+        if source is not None:
+            params["filter[source][_eq]"] = source
+        return await self.client.get_items(self.measurements, params=params)
+
     async def get_latest_source_runs(self) -> dict[str, dict[str, object]]:
         """Most recent poll telemetry per source, for the data-health panel."""
         rows = await self.client.get_items(self.runs, params={"sort": "-fetched_at", "limit": 200})

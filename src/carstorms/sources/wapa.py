@@ -40,13 +40,14 @@ def _parse_dt(value: Any) -> datetime | None:
 
 
 class _IslandTally:
-    __slots__ = ("areas", "count", "crew", "out")
+    __slots__ = ("areas", "count", "crew", "out", "starts")
 
     def __init__(self) -> None:
         self.out = 0
         self.count = 0
         self.areas: set[str] = set()
         self.crew = False
+        self.starts: list[datetime] = []
 
 
 class WAPAOutageSource(HazardSource):
@@ -82,6 +83,9 @@ class WAPAOutageSource(HazardSource):
                 tally.areas.add(str(street).title())
             if outage.get("crewAssigned"):
                 tally.crew = True
+            start = _parse_dt(outage.get("outageStartTime"))
+            if start is not None and int(outage.get("customersOutNow") or 0) > 0:
+                tally.starts.append(start)
 
         self.last_measurements = [
             Measurement(
@@ -90,9 +94,15 @@ class WAPAOutageSource(HazardSource):
                 value=float(tally.out),
                 unit="customers",
                 island=island,
+                station=island.value,
+                station_name=island.value.replace("_", " ").title(),
                 status="outage" if tally.out > 0 else "ok",
                 sampled_at=sampled_at,
-                raw={"outage_count": tally.count, "crew_assigned": tally.crew},
+                raw={
+                    "outage_count": tally.count,
+                    "crew_assigned": tally.crew,
+                    "active_outage_starts": sorted(start.isoformat() for start in tally.starts),
+                },
             )
             for island, tally in tallies.items()
         ]
@@ -127,6 +137,10 @@ class WAPAOutageSource(HazardSource):
                 island=Island.ST_JOHN,
                 affects_st_john=True,
                 effective=sampled_at,
-                raw={"customers_out": sj.out, "outage_count": sj.count},
+                raw={
+                    "customers_out": sj.out,
+                    "outage_count": sj.count,
+                    "active_outage_starts": sorted(start.isoformat() for start in sj.starts),
+                },
             )
         ]

@@ -18,6 +18,8 @@ from carstorms.content.ferry import next_departures
 from carstorms.content.recommendations import recommendation_text
 from carstorms.dashboard.advisory import build_activity_advisory
 from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
+from carstorms.dashboard.restaurants import build_restaurant_panel, fetch_google_restaurants
+from carstorms.dashboard.wind import build_wind_panel
 from carstorms.directus.repository import DirectusRepository
 from carstorms.geo import haversine_km, usvi_island
 from carstorms.logging import get_logger
@@ -107,12 +109,14 @@ class DashboardBuilder:
                 self._safe("metar", self._fetch_metar(http)),
                 self._safe("ndbc", self._fetch_ndbc(http, now)),
                 self._safe("wapa", self._fetch_wapa(http)),
+                self._safe("power_history", self._fetch_power_history()),
                 self._safe("nps", self._fetch_nps(http)),
                 self._safe("inat", self._fetch_inat(http)),
                 self._safe("sargassum", self._fetch_sargassum(http)),
                 self._safe("alerts", self._fetch_alerts()),
                 self._safe("beaches", self._fetch_beaches()),
                 self._safe("events", self._fetch_events()),
+                self._safe("restaurants", self._fetch_restaurants(http, now)),
                 self._safe("health", self._fetch_health()),
             )
         )
@@ -128,7 +132,7 @@ class DashboardBuilder:
             "tropical": self._panel_tropical(results["tropical"]),
             "earthquakes": self._panel_quakes(results["quakes"]),
             "beaches": self._panel_beaches(results["beaches"]),
-            "power": self._panel_power(results["wapa"]),
+            "power": self._panel_power(results["wapa"], results["power_history"], now),
             "national_park": self._panel_nps(results["nps"]),
             "sargassum": self._panel_sargassum(results["sargassum"]),
             "wildlife": self._panel_wildlife(results["inat"]),
@@ -143,6 +147,15 @@ class DashboardBuilder:
             panels["air_quality"],
             panels["sargassum"],
             panels["beaches"],
+            panels["alerts"],
+            now,
+        )
+        panels["wind"] = build_wind_panel(results["forecast"], panels["alerts"], now)
+        panels["restaurants"] = build_restaurant_panel(
+            results["restaurants"],
+            results["events"],
+            results["forecast"],
+            panels["power"],
             panels["alerts"],
             now,
         )
@@ -175,7 +188,7 @@ class DashboardBuilder:
                 "timezone": self.settings.timezone_name,
                 "forecast_days": 7,
                 "current": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index",
-                "hourly": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,uv_index,visibility",
+                "hourly": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,visibility",
                 "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset",
             },
         )
@@ -313,6 +326,24 @@ class DashboardBuilder:
         if self.repo is None:
             return None
         return await self.repo.get_latest_measurements("enterococcus", island="st_john")
+
+    async def _fetch_power_history(self) -> Any:
+        if self.repo is None:
+            return None
+        return await self.repo.get_measurement_history(
+            "outage_customers", island="st_john", source="wapa"
+        )
+
+    async def _fetch_restaurants(self, http: httpx.AsyncClient, now: datetime) -> Any:
+        if not self.settings.google_places_api_key:
+            return None
+        return await fetch_google_restaurants(
+            http,
+            api_key=self.settings.google_places_api_key,
+            latitude=self.settings.latitude,
+            longitude=self.settings.longitude,
+            fetched_at=now,
+        )
 
     async def _fetch_nps(self, http: httpx.AsyncClient) -> Any:
         if not self.settings.nps_enabled:
@@ -564,11 +595,14 @@ class DashboardBuilder:
         latest = max((str(i["sampled_at"]) for i in items if i["sampled_at"]), default=None)
         return {"available": True, "count": len(items), "items": items, "latest_sampled_at": latest}
 
-    def _panel_power(self, data: Any) -> dict[str, Any]:
+    def _panel_power(
+        self, data: Any, history: Any = None, now: datetime | None = None
+    ) -> dict[str, Any]:
         if not data:
             return self._unavailable()
         summary = data.get("summary") or {}
         per = {Island.ST_JOHN: {"out": 0, "count": 0}, Island.ST_THOMAS: {"out": 0, "count": 0}}
+        st_john_starts: list[datetime] = []
         for outage in data.get("outages") or []:
             point = outage.get("outagePoint") or {}
             lat, lng = point.get("lat"), point.get("lng")
@@ -579,6 +613,18 @@ class DashboardBuilder:
                 continue
             per[island]["out"] += int(outage.get("customersOutNow") or 0)
             per[island]["count"] += 1
+            if island is Island.ST_JOHN and int(outage.get("customersOutNow") or 0) > 0:
+                start = _parse_iso(outage.get("outageStartTime"))
+                if start is not None:
+                    st_john_starts.append(start)
+        updated_at = _parse_iso(summary.get("updateTime"))
+        timeline = _power_timeline(
+            history if isinstance(history, list) else [],
+            current_out=per[Island.ST_JOHN]["out"],
+            current_sampled_at=updated_at,
+            active_start=min(st_john_starts) if st_john_starts else None,
+            now=now or datetime.now(UTC),
+        )
         return {
             "available": True,
             "st_john": per[Island.ST_JOHN],
@@ -586,6 +632,7 @@ class DashboardBuilder:
             "territory_out": summary.get("customersOutNow"),
             "customers_served": summary.get("customersServed"),
             "updated_at": _ast(summary.get("updateTime")),
+            "st_john_timeline": timeline,
         }
 
     def _panel_nps(self, data: Any) -> dict[str, Any]:
@@ -771,6 +818,108 @@ def _parse_iso(value: Any) -> datetime | None:
     except ValueError:
         return None
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
+def _power_timeline(
+    history: list[dict[str, Any]],
+    *,
+    current_out: int,
+    current_sampled_at: datetime | None,
+    active_start: datetime | None,
+    now: datetime,
+) -> dict[str, Any]:
+    """Derive St. John outage/online intervals from archived WAPA readings.
+
+    WAPA publishes exact starts for active incidents but not completed incidents.
+    Restoration therefore means the first archived poll that confirmed zero
+    customers out; the returned precision labels keep that distinction visible.
+    """
+    records: list[tuple[datetime, bool, datetime | None]] = []
+    for row in history:
+        sampled = _parse_iso(row.get("sampled_at"))
+        if sampled is None:
+            continue
+        try:
+            is_out = float(row.get("value") or 0) > 0
+        except (TypeError, ValueError):
+            is_out = row.get("status") == "outage"
+        raw = row.get("raw")
+        starts = raw.get("active_outage_starts") if isinstance(raw, dict) else None
+        parsed_starts = [_parse_iso(value) for value in starts] if isinstance(starts, list) else []
+        exact_start = min((value for value in parsed_starts if value is not None), default=None)
+        records.append((sampled, is_out, exact_start))
+
+    sampled_now = current_sampled_at or now
+    records.append((sampled_now, current_out > 0, active_start))
+    # A timestamp can occur in both history and the live snapshot; live wins.
+    records = sorted({record[0]: record for record in records}.values(), key=lambda item: item[0])
+
+    state = records[0][1]
+    segment_start = records[0][2] if state and records[0][2] else records[0][0]
+    segment_start_exact = bool(state and records[0][2])
+    segment_kind = "reported" if segment_start_exact else "history_start"
+    completed: list[dict[str, Any]] = []
+
+    for sampled, is_out, reported_start in records[1:]:
+        if is_out == state:
+            if state and reported_start is not None and reported_start < segment_start:
+                segment_start = reported_start
+                segment_start_exact = True
+                segment_kind = "reported"
+            continue
+        if state:
+            completed.append(
+                {
+                    "start": segment_start,
+                    "end": sampled,
+                    "start_precision": "reported" if segment_start_exact else "first_confirmed",
+                    "end_precision": "first_confirmed",
+                }
+            )
+        state = is_out
+        segment_start = reported_start if is_out and reported_start is not None else sampled
+        segment_start_exact = bool(is_out and reported_start is not None)
+        segment_kind = "reported" if segment_start_exact else "first_confirmed"
+
+    if state and active_start is not None:
+        segment_start = active_start
+        segment_start_exact = True
+        segment_kind = "reported"
+
+    reference = now if now.tzinfo else now.replace(tzinfo=UTC)
+    last = completed[-1] if completed else None
+    last_outage = None
+    if last is not None:
+        last_outage = {
+            "start": _ast(last["start"]),
+            "end": _ast(last["end"]),
+            "start_precision": last["start_precision"],
+            "end_precision": last["end_precision"],
+            "duration": _duration_values(last["end"] - last["start"]),
+        }
+
+    history_available = bool(history)
+    timeline_available = (state and active_start is not None) or history_available
+    return {
+        "available": timeline_available,
+        "status": "outage" if state else "uninterrupted",
+        "since": _ast(segment_start) if timeline_available else None,
+        "since_precision": segment_kind if timeline_available else "unknown",
+        "duration": _duration_values(reference - segment_start) if timeline_available else None,
+        "last_outage": last_outage,
+        "history_available": history_available,
+        "coverage_since": _ast(records[0][0]) if history_available else None,
+        "reason": None if timeline_available else "Power history is not available yet.",
+    }
+
+
+def _duration_values(delta: timedelta) -> dict[str, float]:
+    seconds = max(0.0, delta.total_seconds())
+    return {
+        "hours": round(seconds / 3600, 1),
+        "days": round(seconds / 86400, 2),
+        "weeks": round(seconds / 604800, 2),
+    }
 
 
 def _aqi_category(aqi: Any) -> str:
