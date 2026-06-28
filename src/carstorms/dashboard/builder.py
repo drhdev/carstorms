@@ -20,6 +20,12 @@ from carstorms.dashboard.advisory import build_activity_advisory
 from carstorms.dashboard.airport import build_airport_panel
 from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
 from carstorms.dashboard.restaurants import build_restaurant_panel, fetch_google_restaurants
+from carstorms.dashboard.sargassum import (
+    build_sargassum_panel,
+    fetch_caricoos_trend,
+    fetch_noaa_sir,
+    fetch_sargassum_watch,
+)
 from carstorms.dashboard.wind import build_wind_panel
 from carstorms.directus.repository import DirectusRepository
 from carstorms.geo import haversine_km, usvi_island
@@ -102,6 +108,8 @@ class DashboardBuilder:
         self.repo = repo
         self._flightaware_cache: dict[str, Any] | None = None
         self._flightaware_cache_at: datetime | None = None
+        self._sargassum_cache: dict[str, Any] | None = None
+        self._sargassum_cache_at: datetime | None = None
 
     async def build(self, http: httpx.AsyncClient) -> dict[str, Any]:
         now = datetime.now(UTC)
@@ -122,7 +130,7 @@ class DashboardBuilder:
                 self._safe("power_history", self._fetch_power_history()),
                 self._safe("nps", self._fetch_nps(http)),
                 self._safe("inat", self._fetch_inat(http)),
-                self._safe("sargassum", self._fetch_sargassum(http)),
+                self._safe("sargassum", self._fetch_sargassum(http, now)),
                 self._safe("alerts", self._fetch_alerts()),
                 self._safe("beaches", self._fetch_beaches()),
                 self._safe("events", self._fetch_events()),
@@ -144,7 +152,7 @@ class DashboardBuilder:
             "beaches": self._panel_beaches(results["beaches"]),
             "power": self._panel_power(results["wapa"], results["power_history"], now),
             "national_park": self._panel_nps(results["nps"]),
-            "sargassum": self._panel_sargassum(results["sargassum"]),
+            "sargassum": self._panel_sargassum(results["sargassum"], now),
             "wildlife": self._panel_wildlife(results["inat"]),
             "travel": self._panel_travel(results["metar"], results["alerts"]),
             "airport": build_airport_panel(
@@ -748,44 +756,62 @@ class DashboardBuilder:
         )
         return {"available": True, "count": len(items), "items": items, "source_url": explore}
 
-    async def _fetch_sargassum(self, http: httpx.AsyncClient) -> Any:
+    async def _fetch_sargassum(self, http: httpx.AsyncClient, now: datetime) -> dict[str, Any]:
+        if (
+            self._sargassum_cache is not None
+            and self._sargassum_cache_at is not None
+            and (now - self._sargassum_cache_at).total_seconds()
+            < self.settings.sargassum_refresh_seconds
+        ):
+            return self._sargassum_cache
+        result: dict[str, Any] = {"sir": None, "caricoos": None, "watch": None, "afai": None}
+        errors: dict[str, str] = {}
+        try:
+            result["sir"] = await fetch_noaa_sir(http, now)
+        except Exception as exc:
+            errors["sir"] = f"{type(exc).__name__}: {exc}"
+
+        if result["sir"]:
+            names = ("caricoos", "watch")
+            calls = (fetch_caricoos_trend(http, now), fetch_sargassum_watch(http, now))
+        else:
+            # AFAI is deliberately a true fallback: a slow legacy feed must not
+            # delay a successfully downloaded daily NOAA coastal product.
+            names = ("afai", "watch")
+            calls = (self._fetch_sargassum_afai(http), fetch_sargassum_watch(http, now))
+        values = await asyncio.gather(*calls, return_exceptions=True)
+        for name, value in zip(names, values, strict=True):
+            if isinstance(value, BaseException):
+                errors[name] = f"{type(value).__name__}: {value}"
+            else:
+                result[name] = value
+        result["errors"] = errors
+        if result["sir"] or result["afai"]:
+            self._sargassum_cache = result
+            self._sargassum_cache_at = now
+        elif (
+            self._sargassum_cache is not None
+            and self._sargassum_cache_at is not None
+            and now - self._sargassum_cache_at < timedelta(hours=12)
+        ):
+            return {
+                **self._sargassum_cache,
+                "cache_stale": True,
+                "errors": {**self._sargassum_cache.get("errors", {}), **errors},
+            }
+        return result
+
+    async def _fetch_sargassum_afai(self, http: httpx.AsyncClient) -> Any:
         lat, lon = self.settings.latitude, self.settings.longitude
         d = 0.13  # ~14 km box around St. John (latitude descends in this dataset)
         subset = f"AFAI[(last)][({lat + d:.4f}):({lat - d:.4f})][({lon - d:.4f}):({lon + d:.4f})]"
         return await get_json(http, f"{SARGASSUM_URL}?{subset}")
 
-    def _panel_sargassum(self, data: Any) -> dict[str, Any]:
-        region_url = (
-            "https://optics.marine.usf.edu/cgi-bin/optics_data?roi=N_ANTILLES&unfold=menu_VAS_Carib"
-        )
-        source_url = "https://optics.marine.usf.edu/projects/saws.html"
-        note = (
-            "Satellite floating-algae (Sargassum) index near St. John, past 7 days. "
-            "Windward (south/east) beaches are usually affected first."
-        )
-        base = {"region_url": region_url, "source_url": source_url, "note": note}
-        table = (data or {}).get("table") or {}
-        cols = table.get("columnNames") or []
-        rows = table.get("rows") or []
-        if "AFAI" not in cols:
-            return {"available": False, "reason": "unavailable", **base}
-        ai, ti = cols.index("AFAI"), cols.index("time")
-        values = [r[ai] for r in rows if r[ai] is not None]
-        observed_at = _ast(rows[0][ti]) if rows else None
-        if not values:
-            level, peak, patches = "unknown", None, 0  # all cloud-masked
-        else:
-            peak = max(values)
-            patches = sum(1 for v in values if v >= 0.001)
-            level = "elevated" if peak >= 0.002 else "moderate" if peak >= 0.001 else "low"
-        return {
-            "available": True,
-            "level": level,
-            "afai_peak": round(peak, 5) if peak is not None else None,
-            "patches": patches,
-            "observed_at": observed_at,
-            **base,
-        }
+    def _panel_sargassum(self, data: Any, now: datetime | None = None) -> dict[str, Any]:
+        # Accept a raw AFAI response for compatibility with existing callers/tests.
+        if isinstance(data, dict) and "table" in data:
+            data = {"afai": data}
+        return build_sargassum_panel(data, now or datetime.now(UTC))
 
     def _panel_travel(self, metar: Any, events: Any) -> dict[str, Any]:
         ob = metar[0] if isinstance(metar, list) and metar else {}

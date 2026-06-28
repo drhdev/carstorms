@@ -50,6 +50,7 @@ key/extra work; **C** = no API → curated (manual channel) or static.
 | 17 | **Wind & outdoor impact** | Current/morning/afternoon/evening direction, sustained speed, gusts and green/yellow/red 0–100 severity | Open-Meteo hourly + active CarStorms wind alerts | **A** | each load |
 | 18 | **Restaurants today** | Today's hours/open status for popular venues, source confidence and storm/power disruption warning | Google Places current/special hours; official sites; verified Directus notices | **A/B** | 5–30 min |
 | 19 | **STT airport forecast** | Explainable 0–100 disruption risk, live delay/cancellation statistics, upcoming flights and modeled terminal pressure | FAA NAS Status + TIST METAR/TAF; optional licensed FlightAware AeroAPI | **A/B** | 5–15 min |
+| 20 | **Sargassum by beach** | 0–100 pressure for 14 beaches, best alternatives, age/confidence and fresh observation override | NOAA daily SIR KMZ + CARICOOS 48-hour particle trend + Sargassum Watch; AFAI fallback | **A** | Daily / each fresh report |
 
 **Notes from research**
 - **Open-Meteo** alone supplies panels 2–6 and 8 with **no API key** (forecast incl.

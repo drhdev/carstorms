@@ -428,15 +428,33 @@ function renderNPS(p){
 function renderSargassum(p){
   if(!p) return "";
   if(!p.available) return card("Sargassum","",
-    `<div class="muted">No recent satellite read (cloud cover). <a href="${p.region_url||'#'}" target="_blank" rel="noopener">USF map</a></div>`,
-    srcFoot('USF AFAI via NOAA', p.source_url, null));
-  const lv=(p.level||'unknown'), cls = lv==='elevated'?'status-bad':(lv==='moderate'?'status-warn':(lv==='low'?'status-good':'muted'));
-  return card("Sargassum on beaches","7-day",
-    `<div class="big ${cls}">${lv.toUpperCase()}</div>
-     <div class="muted">near St. John${p.patches? ' · '+p.patches+' patch area(s) detected':''}</div>
-     ${row("Detail", `<a href="${p.region_url}" target="_blank" rel="noopener">USF regional map</a>`)}
-     <div class="muted" style="font-size:12px;margin-top:6px">${p.note||''}</div>`,
-    srcFoot('USF AFAI via NOAA', p.source_url, p.observed_at));
+    `<div class="muted">${esc(p.reason||'No recent coastal or satellite estimate available.')}</div>`,
+    srcFoot(p.source||'NOAA SIR / USF AFAI', p.region_url||p.source_url, null));
+  const score=p.score, lv=p.risk_level||p.level||'unknown', band=riskBand(score||0);
+  const age=p.age_hours==null?'age unavailable':(p.age_hours<24?'<24 hours old':(Math.round(p.age_hours)+' hours old'));
+  let b=`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+      <span class="big band-${band}">${score==null?'—':score+'/100'}</span><span class="band-${band}" style="font-weight:700;text-transform:capitalize">${esc(lv)}</span></div>
+    <div class="wind-meter"><span class="fill-${band}" style="width:${Math.max(0,Math.min(100,score||0))}%"></span></div>
+    <div class="muted" style="font-size:12px">${esc(p.confidence||'unknown')} · ${esc(age)}${p.source_date?' · NOAA '+esc(p.source_date):''}</div>
+    <div style="font-size:12px;margin-top:6px">${esc(p.disclaimer||p.note||'')}</div>`;
+  if(p.headline_beach) b+=row("Highest pressure",esc(p.headline_beach));
+  const best=(p.best_choices||[]).filter(x=>x.score!=null).slice(0,4);
+  if(best.length){
+    b+=`<div class="activity-label">Lower-pressure choices</div>`;
+    best.forEach(x=>b+=row(esc(x.name),`<span class="band-${riskBand(x.score)}">${x.score}/100 · ${esc(x.risk_level)}</span>${x.confidence==='Observed'?' · observed':''}`));
+  }
+  const high=(p.highest_pressure||[]).filter(x=>x.score!=null).slice(0,4);
+  if(high.length){
+    b+=`<details class="score-details"><summary>All highest-pressure beaches</summary>`;
+    high.forEach(x=>b+=row(esc(x.name),`${x.score}/100${x.caricoos_adjustment?' · drift '+(x.caricoos_adjustment>0?'+':'')+x.caricoos_adjustment:''}`));
+    b+=`</details>`;
+  }
+  const obs=(p.local_observations||[])[0];
+  if(obs) b+=`<div class="status-good" style="font-size:12px;margin-top:7px">Observed ${fmtDT(obs.observed_at)} near ${esc(obs.beach_name)}: ${esc(obs.condition)}${(obs.photos||[])[0]?' · '+link('photo',(obs.photos||[])[0]):''}</div>`;
+  const sources=[link(p.source||'NOAA SIR',p.region_url||p.source_url)];
+  if(p.caricoos&&p.caricoos.available) sources.push(link('CARICOOS 48h trend',p.caricoos.source_url));
+  if(p.observation_source_url) sources.push(link('Sargassum Watch',p.observation_source_url));
+  return `<div class="card restaurant-card"><h2><span>Sargassum by beach</span><span class="muted">${esc(p.source||'')}</span></h2>${b}<div class="foot">${sources.join(' · ')}<br>${esc(p.note||'')}</div></div>`;
 }
 
 function renderWifi(){

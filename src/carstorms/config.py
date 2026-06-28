@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     tide_station_id: str = "9751381"  # NOAA CO-OPS Lameshur Bay, St. John
     ndbc_buoy_id: str = "41052"  # NDBC buoy south of St. John (observed when fresh)
     ndbc_max_age_hours: int = 6  # ignore buoy data older than this
+    sargassum_refresh_seconds: int = 1800  # NOAA/CARICOOS/observation bundle
     # Google Places (New) provides today's/special restaurant hours and live
     # business status. Without a key, the card uses clearly labelled official
     # published schedules and operator-verified Directus notices.

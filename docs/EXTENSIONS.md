@@ -40,7 +40,7 @@ needs scraping + a manual-override backstop.
 | 1 | **Beach water quality** | EPA **Water Quality Portal** (USGS/EPA + DPNR data) | **A** | `waterqualitydata.us/data/Result/search?statecode=US:78&characteristicName=Enterococcus&mimeType=geojson` | Weekly (DPNR samples 35–43 beaches: 5 STJ, 13 STT) |
 | 1b | Beach advisories/closures | EPA **BEACON 2.0** + DPNR weekly "Beach Advisory" PDF | A/C | BEACON beach-action data; `dpnr.vi.gov` PDF cross-check | Weekly / as issued |
 | 2 | **Air quality / Saharan dust** | EPA **AirNow API** | **A** | `airnowapi.org/aq/observation/latLong/current/?latitude=18.34&longitude=-64.93&distance=75&API_KEY=…` (free key) | Hourly |
-| 3 | **Sargassum** | **CariCOOS** 7-day PR/USVI inundation forecast + ERDDAP; **NOAA CoastWatch SIR** | **A** | `caricoos.org/sargassum/SSOAccum/PRVI`; `dm3.caricoos.org/erddap`; `cwcgom.aoml.noaa.gov/SIR` | Daily |
+| 3 | **Sargassum** | **NOAA CoastWatch SIR** + CARICOOS 48-hour particle trend + Sargassum Watch GPS/photos; AFAI fallback | **A** | `cwcgom.aoml.noaa.gov/SIR`; `caricoos.org/api/sargassum/sso`; `five.epicollect.net/project/sargassum-watch` | Daily / fresh observations |
 | 4 | **Airport (STT) conditions** | **aviationweather.gov** METAR/TAF API | **A** | `aviationweather.gov/api/data/metar?ids=TIST&format=json` (verified live) | ~Hourly |
 | 4b | **Airport closures (structured)** | **FAA NOTAM API** | **A** | `external-api.faa.gov/notamapi/v1/notams` (free client_id/secret), filter ICAO `TIST` | As issued |
 | 4c | Airport status (authoritative announcements) | **VIPA** (Virgin Islands Port Authority) | **C** | `viport.com` news/status | As issued |
@@ -202,11 +202,13 @@ Built and tested:
   recommendation templates (airport/ferry, and auto-appended to tropical watch+).
 - Per-source polling cadence so the slow WQP CSV isn't re-downloaded every cycle.
 
+Implemented dashboard extensions:
+- **Beach-level Sargassum pressure** — NOAA's daily SIR KMZ is matched to registered
+  beaches within 1.5 km. CARICOOS regional particle density adjusts scores by at most
+  ±15 using the 48-hour trend; a GPS/photo report under 24 hours changes confidence to
+  "Observed." The older island-wide AFAI aggregate is retained only as fallback.
+
 Deferred (by design / pending decisions):
-- **Live sargassum source** — NOAA's public ERDDAP exposes raw AFAI grids, not a
-  calibrated inundation-risk product; shipping uncalibrated thresholds would risk
-  false alarms. Sargassum alerts flow through the manual channel until a calibrated
-  feed (CariCOOS inundation forecast) is wired in.
 - **Automated scrapers** for VIPA (ferry/airport announcements), WAPA water/boil-water
   advisories and VITEMA/DOH — manual channel first per the chosen approach.
 
@@ -214,4 +216,4 @@ Deferred (by design / pending decisions):
 - No-API hazards → **manual-override channel first** (built); scrapers later.
 - API keys → none yet; AirNow & FAA NOTAM sources are implemented and **gated on
   config**, activating as soon as keys are added.
-- Phase 1 scope → **all Tier-A + manual channel** (shipped, minus deferred sargassum).
+- Phase 1 scope → **all Tier-A + manual channel** (shipped).

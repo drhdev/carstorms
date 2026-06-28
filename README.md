@@ -55,7 +55,9 @@ A single scale spans every hazard type:
 | **EPA AirNow** | Air quality / Saharan dust | yes | Activates when an AirNow key is configured |
 | **WAPA outage viewer** | Power outages | no | Undocumented outage-viewer JSON; St. John outages alert, both islands archived |
 | **NPS API** (park `viis`) | Park hours, weather blurb, alerts, events | yes | Dashboard "National Park" panel; activates with a free NPS key |
-| **USF AFAI via NOAA ERDDAP** | Sargassum (seaweed) | no | Low/Moderate/Elevated indicator from the 7-day floating-algae index in a box around St. John (+ USF regional map link) |
+| **NOAA Daily SIR** | Beach-level Sargassum pressure | no | Primary ~1 km coastal risk matched to 14 registered St. John beaches; 0–100 score, source age and confidence |
+| **CARICOOS + Sargassum Watch** | Sargassum drift / observations | no | 48-hour regional particle trend (±15 adjustment) and fresh GPS/photo ground-truth overrides |
+| **USF AFAI via NOAA ERDDAP** | Sargassum fallback | no | Island-wide seven-day floating-algae index, fetched only when NOAA SIR is unavailable |
 | **Ferry timetable** (curated) | STT↔STJ next departures | no | Curated published schedule (reviewed monthly); next sailing both directions, all 3 routes |
 | **iNaturalist** | Recent wildlife sightings | no | Dashboard panel of recent verified observations near St. John (species, photo, link) |
 | **Leaflet + OpenStreetMap** | Trail map | no | Interactive St. John trail map with curated trailheads (Reef Bay, Ram Head, …) + stats |
@@ -65,8 +67,8 @@ A single scale spans every hazard type:
 
 > Coverage is **St. Thomas + St. John** (NWS zone VIZ001 spans both); events and
 > readings are tagged by island. See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for the
-> full extension concept, source credibility tiers, and what's deferred (live
-> sargassum, automated scrapers for ferry/WAPA/VITEMA).
+> full extension concept, source credibility tiers, and what's deferred
+> (automated scrapers for ferry/WAPA/VITEMA).
 
 ## How events stay coherent
 
