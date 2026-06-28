@@ -60,7 +60,9 @@ def test_aqi_category() -> None:
     assert _aqi_category(None) == "unknown"
 
 
-def _activity_inputs(*, storm: bool = False, wave: float = 0.4, wave_period: float = 8.0) -> tuple[dict, dict]:
+def _activity_inputs(
+    *, storm: bool = False, wave: float = 0.4, wave_period: float = 8.0
+) -> tuple[dict, dict]:
     times = [f"2026-06-25T{hour:02d}:00" for hour in range(6, 18)]
     count = len(times)
     forecast = {
@@ -91,7 +93,9 @@ def _activity_inputs(*, storm: bool = False, wave: float = 0.4, wave_period: flo
     return forecast, marine
 
 
-def _advisory(*, storm: bool = False, wave: float = 0.4, wave_period: float = 8.0, sargassum: str = "low") -> dict:
+def _advisory(
+    *, storm: bool = False, wave: float = 0.4, wave_period: float = 8.0, sargassum: str = "low"
+) -> dict:
     forecast, marine = _activity_inputs(storm=storm, wave=wave, wave_period=wave_period)
     return build_activity_advisory(
         forecast,
@@ -425,7 +429,12 @@ def test_webserver_serves_routes() -> None:
 
     health = HealthState(max_age_seconds=900)
     dashboard = DashboardState()
-    dashboard.update({"generated_at": "2026-06-25T00:00:00Z", "panels": {}})
+    dashboard.update(
+        {
+            "generated_at": "2026-06-25T00:00:00Z",
+            "panels": {"airport": {"available": True, "risk": {"score": 17}}},
+        }
+    )
     server = WebServer("127.0.0.1", 0, health, dashboard)
     port = server._server.server_address[1]
     server.start()
@@ -436,7 +445,11 @@ def test_webserver_serves_routes() -> None:
 
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/dashboard.json", timeout=5) as r:
             assert r.status == 200
-            assert json.loads(r.read())["panels"] == {}
+            assert json.loads(r.read())["panels"]["airport"]["risk"]["score"] == 17
+
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/airport.json", timeout=5) as r:
+            assert r.status == 200
+            assert json.loads(r.read())["risk"]["score"] == 17
 
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=5) as r:
             assert r.status in (200, 503)

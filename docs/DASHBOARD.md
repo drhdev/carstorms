@@ -49,6 +49,7 @@ key/extra work; **C** = no API → curated (manual channel) or static.
 | 16 | **Today's activity guide** | Morning/afternoon ranked St. John activities with 0–100 scores, reasons, confidence and safety overrides | Derived from forecast, marine, UV, AQI, Sargassum, beach and alert panels | **A** | each load |
 | 17 | **Wind & outdoor impact** | Current/morning/afternoon/evening direction, sustained speed, gusts and green/yellow/red 0–100 severity | Open-Meteo hourly + active CarStorms wind alerts | **A** | each load |
 | 18 | **Restaurants today** | Today's hours/open status for popular venues, source confidence and storm/power disruption warning | Google Places current/special hours; official sites; verified Directus notices | **A/B** | 5–30 min |
+| 19 | **STT airport forecast** | Explainable 0–100 disruption risk, live delay/cancellation statistics, upcoming flights and modeled terminal pressure | FAA NAS Status + TIST METAR/TAF; optional licensed FlightAware AeroAPI | **A/B** | 5–15 min |
 
 **Notes from research**
 - **Open-Meteo** alone supplies panels 2–6 and 8 with **no API key** (forecast incl.
@@ -85,6 +86,7 @@ stack. No browser CORS or exposed tokens, no second service to operate.
         │  HTTP server (extend the health server):                   │
         │    GET /                -> dashboard.html (static asset)   │
         │    GET /api/dashboard.json -> cached snapshot              │
+        │    GET /api/airport.json   -> independent STT forecast      │
         │    GET /healthz         -> (existing)                      │
         └────────────────────────────────────────────────────────────┘
 ```

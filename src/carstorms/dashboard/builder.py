@@ -17,6 +17,7 @@ from carstorms.config import Settings
 from carstorms.content.ferry import next_departures
 from carstorms.content.recommendations import recommendation_text
 from carstorms.dashboard.advisory import build_activity_advisory
+from carstorms.dashboard.airport import build_airport_panel
 from carstorms.dashboard.astro import describe_weather, moon_phase, uv_risk
 from carstorms.dashboard.restaurants import build_restaurant_panel, fetch_google_restaurants
 from carstorms.dashboard.wind import build_wind_panel
@@ -35,6 +36,10 @@ TIDES_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 NHC_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
 USGS_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 METAR_URL = "https://aviationweather.gov/api/data/metar"
+TAF_URL = "https://aviationweather.gov/api/data/taf"
+FAA_NAS_EVENTS_URL = "https://nasstatus.faa.gov/api/airport-events"
+FAA_NAS_PLAN_URL = "https://nasstatus.faa.gov/api/operations-plan"
+FLIGHTAWARE_AIRPORT_URL = "https://aeroapi.flightaware.com/aeroapi/airports/{icao}/flights"
 NDBC_URL = "https://www.ndbc.noaa.gov/data/realtime2/{buoy}.txt"
 INAT_URL = "https://api.inaturalist.org/v1/observations"
 # USF AFAI (floating-algae / Sargassum index) 7-day composite, hosted on NOAA ERDDAP.
@@ -95,6 +100,8 @@ class DashboardBuilder:
     def __init__(self, settings: Settings, repo: DirectusRepository | None = None) -> None:
         self.settings = settings
         self.repo = repo
+        self._flightaware_cache: dict[str, Any] | None = None
+        self._flightaware_cache_at: datetime | None = None
 
     async def build(self, http: httpx.AsyncClient) -> dict[str, Any]:
         now = datetime.now(UTC)
@@ -107,6 +114,9 @@ class DashboardBuilder:
                 self._safe("tropical", self._fetch_tropical(http)),
                 self._safe("quakes", self._fetch_quakes(http, now)),
                 self._safe("metar", self._fetch_metar(http)),
+                self._safe("taf", self._fetch_taf(http)),
+                self._safe("faa_nas", self._fetch_faa_nas(http, now)),
+                self._safe("flightaware", self._fetch_flightaware(http, now)),
                 self._safe("ndbc", self._fetch_ndbc(http, now)),
                 self._safe("wapa", self._fetch_wapa(http)),
                 self._safe("power_history", self._fetch_power_history()),
@@ -137,6 +147,17 @@ class DashboardBuilder:
             "sargassum": self._panel_sargassum(results["sargassum"]),
             "wildlife": self._panel_wildlife(results["inat"]),
             "travel": self._panel_travel(results["metar"], results["alerts"]),
+            "airport": build_airport_panel(
+                results["metar"],
+                results["taf"],
+                results["faa_nas"],
+                results["flightaware"],
+                now,
+                airport_icao=self.settings.airport_icao,
+                airport_iata=self.settings.airport_iata,
+                airport_name=self.settings.airport_name,
+                load_factor=self.settings.airport_load_factor,
+            ),
             "events": self._panel_events(results["events"]),
             "moorings": self._panel_moorings(results["marine"], results["forecast"]),
             "data_health": self._panel_health(results["health"]),
@@ -259,6 +280,55 @@ class DashboardBuilder:
         return await get_json(
             http, METAR_URL, params={"ids": self.settings.airport_icao, "format": "json"}
         )
+
+    async def _fetch_taf(self, http: httpx.AsyncClient) -> Any:
+        return await get_json(
+            http, TAF_URL, params={"ids": self.settings.airport_icao, "format": "json"}
+        )
+
+    async def _fetch_faa_nas(self, http: httpx.AsyncClient, now: datetime) -> dict[str, Any]:
+        events, operations_plan = await asyncio.gather(
+            get_json(http, FAA_NAS_EVENTS_URL),
+            get_json(http, FAA_NAS_PLAN_URL),
+        )
+        return {
+            "events": events,
+            "operations_plan": operations_plan,
+            "fetched_at": _ast(now),
+        }
+
+    async def _fetch_flightaware(self, http: httpx.AsyncClient, now: datetime) -> dict[str, Any]:
+        if not self.settings.flightaware_enabled:
+            return {
+                "enabled": False,
+                "reason": "Set CARSTORMS_FLIGHTAWARE_API_KEY for live schedules and status.",
+            }
+        if (
+            self._flightaware_cache is not None
+            and self._flightaware_cache_at is not None
+            and (now - self._flightaware_cache_at).total_seconds()
+            < self.settings.airport_flight_refresh_seconds
+        ):
+            return self._flightaware_cache
+        try:
+            payload = await get_json(
+                http,
+                FLIGHTAWARE_AIRPORT_URL.format(icao=self.settings.airport_icao),
+                params={"max_pages": 1},
+                headers={"x-apikey": self.settings.flightaware_api_key},
+            )
+        except Exception:
+            if (
+                self._flightaware_cache is not None
+                and self._flightaware_cache_at is not None
+                and (now - self._flightaware_cache_at) < timedelta(hours=6)
+            ):
+                return {**self._flightaware_cache, "stale": True}
+            raise
+        result = {"enabled": True, "fetched_at": _ast(now), "stale": False, "data": payload}
+        self._flightaware_cache = result
+        self._flightaware_cache_at = now
+        return result
 
     async def _fetch_ndbc(self, http: httpx.AsyncClient, now: datetime) -> Any:
         text = await get_text(http, NDBC_URL.format(buoy=self.settings.ndbc_buoy_id))

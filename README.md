@@ -50,6 +50,8 @@ A single scale spans every hazard type:
 | **Open-Meteo** | Ordinary thunderstorms | no | Low-noise convective heads-up NWS won't formally warn |
 | **EPA Water Quality Portal** | Beach water quality (Enterococcus) | no | Per-beach readings archived to `carstorm_measurements`; advisory only from a fresh sample |
 | **NWS Aviation Weather** (`TIST`) | STT airport conditions/closure | no¹ | METAR flight category; FAA NOTAM closure when credentials set |
+| **FAA NAS Status + TIST TAF** | STT disruption forecast | no | Official traffic-management events and aviation forecast; always-on base for `/api/airport.json` |
+| **FlightAware AeroAPI** | STT schedules/live delays | yes | Optional licensed flight status, cancellation and modeled terminal-pressure input |
 | **EPA AirNow** | Air quality / Saharan dust | yes | Activates when an AirNow key is configured |
 | **WAPA outage viewer** | Power outages | no | Undocumented outage-viewer JSON; St. John outages alert, both islands archived |
 | **NPS API** (park `viis`) | Park hours, weather blurb, alerts, events | yes | Dashboard "National Park" panel; activates with a free NPS key |
@@ -59,7 +61,7 @@ A single scale spans every hazard type:
 | **Leaflet + OpenStreetMap** | Trail map | no | Interactive St. John trail map with curated trailheads (Reef Bay, Ram Head, …) + stats |
 | **Operator overrides** (`carstorm_manual_alerts`) | Ferry, WAPA water, VITEMA/DOH, any ad-hoc | — | The reliable path for hazards with no machine feed |
 
-¹ METAR needs no key; the optional FAA NOTAM closure check needs free FAA credentials.
+¹ METAR, TAF and FAA NAS Status need no key; the optional FAA NOTAM closure check needs free FAA credentials.
 
 > Coverage is **St. Thomas + St. John** (NWS zone VIZ001 spans both); events and
 > readings are tagged by island. See [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for the
@@ -139,12 +141,13 @@ overridden (see `.env.example`).
 ## Dashboard
 
 The worker also serves a single-page **situational dashboard** for St. John at `/`
-(same port as the health check, default `8080`), with a `GET /api/dashboard.json`
+(same port as the health check, default `8080`), with `GET /api/dashboard.json` and
+an independent, documented-by-payload `GET /api/airport.json` airport forecast
 behind it. It refreshes every few minutes and shows, in one glance: active alerts +
 next-24h, the 24h/7-day forecast, **UV index**, air quality / Saharan **dust**,
 **marine** conditions (waves/swell/sea-surface temp), **tides** (Lameshur Bay),
-sun & moon, tropical outlook, recent earthquakes, beach water quality, travel
-(STT airport + ferry), curated island events, boating/mooring suitability, and a
+sun & moon, tropical outlook, recent earthquakes, beach water quality, travel,
+STT disruption/terminal-pressure forecast, curated island events, boating/mooring suitability, and a
 data-health strip. Most panels are keyless (Open-Meteo, NOAA, USGS, NHC); the
 Directus-backed panels (alerts, beaches, events, health) populate when a token is set.
 

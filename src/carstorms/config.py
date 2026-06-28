@@ -47,7 +47,13 @@ class Settings(BaseSettings):
     airnow_distance_miles: int = 75
     # Aviation Weather — STT airport (no key); FAA NOTAM closures need credentials.
     airport_icao: str = "TIST"
+    airport_iata: str = "STT"
     airport_name: str = "Cyril E. King Airport (STT)"
+    # Optional licensed schedules/live-status provider for the independent
+    # airport forecast. FAA NAS + METAR/TAF remain available without this key.
+    flightaware_api_key: str = ""
+    airport_load_factor: float = 0.85
+    airport_flight_refresh_seconds: int = 900
     faa_client_id: str = ""
     faa_client_secret: str = ""
     # WAPA power outages — undocumented outage-viewer JSON (no key). St. John power
@@ -128,6 +134,10 @@ class Settings(BaseSettings):
     @property
     def faa_notam_enabled(self) -> bool:
         return bool(self.faa_client_id and self.faa_client_secret)
+
+    @property
+    def flightaware_enabled(self) -> bool:
+        return bool(self.flightaware_api_key)
 
     @property
     def nps_enabled(self) -> bool:

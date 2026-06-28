@@ -121,6 +121,8 @@ const card = (title, extra, body, foot) =>
   `<div class="card"><h2><span>${title}</span><span class="muted">${extra||""}</span></h2>${body}${foot||""}</div>`;
 const row = (k,v) => `<div class="row"><span class="muted">${k}</span><span>${v}</span></div>`;
 const link = (label,url) => url? `<a href="${url}" target="_blank" rel="noopener">${label}</a>` : label;
+const esc = v => String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const riskBand = n => n>=60?'red':(n>=30?'yellow':'green');
 // Details pages that hold more than the dashboard shows (only where one exists).
 const LINKS = {
   forecast:'https://forecast.weather.gov/MapClick.php?lat=18.335&lon=-64.735',
@@ -381,6 +383,37 @@ function renderTravel(p){
     srcFoot('NWS Aviation Weather · ferry timetable', LINKS.vipa, a.obs_time));
 }
 
+function renderAirport(p){
+  if(!p||!p.available) return card("STT airport forecast","offline",`<div class="muted">Official airport inputs unavailable</div>`);
+  const risk=p.risk||{}, ops=p.operations||{}, crowd=p.crowd||{}, weather=p.weather||{}, faa=p.faa||{};
+  const score=risk.score==null?0:risk.score, band=riskBand(score);
+  let b=`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+      <span class="big band-${band}">${num(score)}/100</span><span class="band-${band}" style="font-weight:700;text-transform:capitalize">${esc(risk.label||'unknown')}</span></div>
+    <div class="wind-meter"><span class="fill-${band}" style="width:${Math.max(0,Math.min(100,score))}%"></span></div>
+    <div class="muted" style="font-size:12px">${esc(risk.confidence||'low')} confidence · transparent weather, FAA, flight and terminal-pressure model</div>`;
+  if(ops.available){
+    b+=row("Live flight window",`${num(ops.total_flights)} flights`);
+    b+=row("Delayed 15+ min",`${num(ops.delayed_flights)}${ops.delay_rate_pct!=null?' · '+ops.delay_rate_pct+'% of known':''}`);
+    b+=row("Average delay",ops.average_delay_minutes==null?'—':ops.average_delay_minutes+' min');
+    b+=row("Cancellations",num(ops.cancelled_flights));
+  } else {
+    b+=`<div class="disruption-note" style="margin-top:9px">Live flight status is not enabled. The risk score currently uses official FAA and TIST weather data only.</div>`;
+  }
+  b+=row("TIST conditions",esc(weather.flight_category||'unknown'));
+  if(crowd.available&&crowd.peak){
+    b+=row("Terminal-pressure peak",`${fmtTime(crowd.peak.time)} · <span class="band-${riskBand(crowd.score||0)}">${esc(crowd.peak.level)}</span>`);
+  }
+  if((faa.local_events||[]).length) b+=`<div class="status-bad" style="font-size:12px;margin-top:7px">FAA: ${esc(faa.local_events[0].detail)}</div>`;
+  (risk.reasons||[]).slice(0,3).forEach(x=> b+=`<div class="muted" style="font-size:12px;margin-top:5px">• ${esc(x)}</div>`);
+  const flights=(p.next_flights||[]).filter(x=>x.direction==='departure').slice(0,5);
+  if(flights.length){
+    b+=`<div class="activity-label">Upcoming departures</div>`;
+    flights.forEach(f=> b+=row(`${esc(f.ident)} → ${esc(f.other_airport||'—')}`,`${fmtTime(f.scheduled_at)}${f.cancelled?' · <span class="status-bad">cancelled</span>':(f.delayed?' · <span class="status-warn">+'+num(f.delay_minutes)+' min</span>':'')}`));
+  }
+  return card("STT airport forecast",`${esc(risk.label||'unknown')} disruption risk`,b,
+    `<div class="foot">${link('Independent JSON API','/api/airport.json')} · ${link('FAA NAS Status','https://nasstatus.faa.gov/')} · ${link('Aviation Weather','https://aviationweather.gov/')}<br>Terminal pressure is modeled, not a live TSA wait time.</div>`);
+}
+
 function renderNPS(p){
   if(!p||!p.available) return card("National Park","",`<div class='muted'>${(p&&p.reason)||'unavailable'}</div>`);
   let b = "";
@@ -496,7 +529,7 @@ async function load(){
       renderMarine(P.marine), renderTides(P.tides), renderAir(P.air_quality),
       renderSargassum(P.sargassum), renderTropical(P.tropical), renderQuakes(P.earthquakes),
       renderBeaches(P.beaches), renderPower(P.power), renderRestaurants(P.restaurants), renderNPS(P.national_park),
-      renderTravel(P.travel), renderMoorings(P.moorings), renderWildlife(P.wildlife),
+      renderAirport(P.airport), renderTravel(P.travel), renderMoorings(P.moorings), renderWildlife(P.wildlife),
       renderWebcams(), renderWifi(), renderEvents(P.events)
     ].join("");
     document.getElementById('dh').innerHTML = renderHealthFooter(P.data_health);

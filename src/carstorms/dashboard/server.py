@@ -6,6 +6,7 @@ thread-safe :class:`DashboardState` that the async builder refreshes.
 
 from __future__ import annotations
 
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -38,11 +39,23 @@ def _make_handler(health: HealthState, dashboard: DashboardState) -> type[BaseHT
                 self._send(200, _HTML_BYTES, "text/html; charset=utf-8")
             elif path == "/api/dashboard.json":
                 self._send(200, dashboard.json_bytes(), "application/json")
+            elif path == "/api/airport.json":
+                snapshot = dashboard.snapshot()
+                airport = snapshot.get("panels", {}).get("airport")
+                if not isinstance(airport, dict):
+                    airport = {
+                        "available": False,
+                        "status": "starting",
+                        "generated_at": snapshot.get("generated_at"),
+                    }
+                self._send(
+                    200,
+                    json.dumps(airport, default=str).encode("utf-8"),
+                    "application/json",
+                )
             elif path in ("/healthz", "/health"):
                 ok = health.is_healthy()
-                import json as _json
-
-                body = _json.dumps(health.snapshot()).encode("utf-8")
+                body = json.dumps(health.snapshot()).encode("utf-8")
                 self._send(200 if ok else 503, body, "application/json")
             else:
                 self._send(404, b"not found", "text/plain")
