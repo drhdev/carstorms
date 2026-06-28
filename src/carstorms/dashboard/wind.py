@@ -157,20 +157,43 @@ def _circular_mean(values: list[float]) -> float | None:
     if not values:
         return None
     radians = [math.radians(value) for value in values]
-    angle = math.degrees(math.atan2(fmean(math.sin(x) for x in radians), fmean(math.cos(x) for x in radians)))
+    angle = math.degrees(
+        math.atan2(fmean(math.sin(x) for x in radians), fmean(math.cos(x) for x in radians))
+    )
     return angle % 360
 
 
 def _compass(value: float | None) -> str:
     if value is None:
         return "unknown"
-    points = ("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
+    points = (
+        "N",
+        "NNE",
+        "NE",
+        "ENE",
+        "E",
+        "ESE",
+        "SE",
+        "SSE",
+        "S",
+        "SSW",
+        "SW",
+        "WSW",
+        "W",
+        "WNW",
+        "NW",
+        "NNW",
+    )
     return f"{points[round(value / 22.5) % 16]} (from)"
 
 
 def _values(hourly: dict[str, Any], field: str, indices: list[int]) -> list[float]:
     source = hourly.get(field) or []
-    return [float(source[index]) for index in indices if index < len(source) and source[index] is not None]
+    return [
+        float(source[index])
+        for index in indices
+        if index < len(source) and source[index] is not None
+    ]
 
 
 def _float(value: Any) -> float | None:

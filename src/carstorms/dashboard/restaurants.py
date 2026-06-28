@@ -46,13 +46,71 @@ _DAILY_09_21 = (("09:00", "21:00"),) * 7
 _DINNER_17_21: Hours = ("17:00", "21:00")
 
 RESTAURANTS = (
-    Restaurant("skinny_legs", "Skinny Legs", "Coral Bay", "Skinny Legs Coral Bay St John USVI", "https://www.skinnylegsvi.com/", "340-779-4982", _DAILY_11_20),
-    Restaurant("longboard", "The Longboard", "Cruz Bay", "The Longboard St John USVI", "https://www.thelongboardstjohn.com/location/the-longboard-st-john/", "340-715-2210", _DAILY_14_21, "Kitchen hours; bar usually continues to 10 PM."),
-    Restaurant("lime_inn", "The Lime Inn", "Cruz Bay", "The Lime Inn St John USVI", "https://thelimeinn.com/contact", "340-776-6425", (("15:00", "21:00"),) * 5 + (None, ("15:00", "21:00"))),
-    Restaurant("sun_dog", "Sun Dog Cafe", "Cruz Bay", "Sun Dog Cafe St John USVI", "https://www.sundogcafe.com/", "340-693-8340", _DAILY_09_21),
-    Restaurant("ocean_362", "Ocean 362", "Cruz Bay", "Ocean 362 St John USVI", "https://ocean362.com/", "340-776-0001", (_DINNER_17_21, None, None, _DINNER_17_21, _DINNER_17_21, _DINNER_17_21, _DINNER_17_21)),
-    Restaurant("extra_virgin", "Extra Virgin Bistro", "Cruz Bay", "Extra Virgin Bistro St John USVI", "https://www.extravirginbistro.com/", "340-715-1864", (("17:30", "21:00"),) * 5 + (None, ("17:30", "21:00"))),
-    Restaurant("miss_lucys", "Miss Lucy's", "Friis Bay", "Miss Lucy's Restaurant St John USVI", "https://misslucysrestaurant.com/", "340-693-5244", None, "Seasonal operation: same-day confirmation is required."),
+    Restaurant(
+        "skinny_legs",
+        "Skinny Legs",
+        "Coral Bay",
+        "Skinny Legs Coral Bay St John USVI",
+        "https://www.skinnylegsvi.com/",
+        "340-779-4982",
+        _DAILY_11_20,
+    ),
+    Restaurant(
+        "longboard",
+        "The Longboard",
+        "Cruz Bay",
+        "The Longboard St John USVI",
+        "https://www.thelongboardstjohn.com/location/the-longboard-st-john/",
+        "340-715-2210",
+        _DAILY_14_21,
+        "Kitchen hours; bar usually continues to 10 PM.",
+    ),
+    Restaurant(
+        "lime_inn",
+        "The Lime Inn",
+        "Cruz Bay",
+        "The Lime Inn St John USVI",
+        "https://thelimeinn.com/contact",
+        "340-776-6425",
+        (("15:00", "21:00"),) * 5 + (None, ("15:00", "21:00")),
+    ),
+    Restaurant(
+        "sun_dog",
+        "Sun Dog Cafe",
+        "Cruz Bay",
+        "Sun Dog Cafe St John USVI",
+        "https://www.sundogcafe.com/",
+        "340-693-8340",
+        _DAILY_09_21,
+    ),
+    Restaurant(
+        "ocean_362",
+        "Ocean 362",
+        "Cruz Bay",
+        "Ocean 362 St John USVI",
+        "https://ocean362.com/",
+        "340-776-0001",
+        (_DINNER_17_21, None, None, _DINNER_17_21, _DINNER_17_21, _DINNER_17_21, _DINNER_17_21),
+    ),
+    Restaurant(
+        "extra_virgin",
+        "Extra Virgin Bistro",
+        "Cruz Bay",
+        "Extra Virgin Bistro St John USVI",
+        "https://www.extravirginbistro.com/",
+        "340-715-1864",
+        (("17:30", "21:00"),) * 5 + (None, ("17:30", "21:00")),
+    ),
+    Restaurant(
+        "miss_lucys",
+        "Miss Lucy's",
+        "Friis Bay",
+        "Miss Lucy's Restaurant St John USVI",
+        "https://misslucysrestaurant.com/",
+        "340-693-5244",
+        None,
+        "Seasonal operation: same-day confirmation is required.",
+    ),
 )
 
 
@@ -175,9 +233,7 @@ def _fallback_item(restaurant: Restaurant, now: datetime) -> dict[str, Any]:
     }
 
 
-def _google_item(
-    restaurant: Restaurant, google: dict[str, Any], now: datetime
-) -> dict[str, Any]:
+def _google_item(restaurant: Restaurant, google: dict[str, Any], now: datetime) -> dict[str, Any]:
     place = google.get("place") or {}
     opening = place.get("currentOpeningHours") or {}
     descriptions = opening.get("weekdayDescriptions") or []
@@ -194,7 +250,10 @@ def _google_item(
         label = "Closed today" if status == "closed_today" else "Closed now"
     else:
         status, label = "unconfirmed", "Hours listed; live status unavailable"
-    special = any(_google_date(day.get("date")) == now.date().isoformat() for day in opening.get("specialDays") or [])
+    special = any(
+        _google_date(day.get("date")) == now.date().isoformat()
+        for day in opening.get("specialDays") or []
+    )
     return {
         "status": status,
         "status_label": label,
@@ -212,9 +271,7 @@ def _google_item(
     }
 
 
-def _notice_override(
-    restaurant: Restaurant, notices: Any, now: datetime
-) -> dict[str, Any] | None:
+def _notice_override(restaurant: Restaurant, notices: Any, now: datetime) -> dict[str, Any] | None:
     aliases = {restaurant.key.replace("_", " "), restaurant.name.lower()}
     for notice in notices if isinstance(notices, list) else []:
         if str(notice.get("category") or "").lower() not in {
@@ -255,13 +312,17 @@ def _disruption_assessment(
     st_john = power.get("st_john") or {}
     if int(st_john.get("out") or 0) > 0:
         severity = "yellow"
-        notes.append("WAPA reports a St. John outage; affected venues may close or become cash-only.")
+        notes.append(
+            "WAPA reports a St. John outage; affected venues may close or become cash-only."
+        )
     current = (forecast or {}).get("current") or {}
     code = int(current.get("weather_code") or 0)
     gust = float(current.get("wind_gusts_10m") or 0)
     if code >= 95 or gust >= 60:
         severity = "red"
-        notes.append("Thunderstorm or severe gust conditions can cause sudden closures and early kitchens.")
+        notes.append(
+            "Thunderstorm or severe gust conditions can cause sudden closures and early kitchens."
+        )
     alert_levels = [
         int(item.get("level") or 0)
         for item in (alerts.get("items") or [])

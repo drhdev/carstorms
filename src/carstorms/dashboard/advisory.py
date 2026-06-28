@@ -31,18 +31,168 @@ class Activity:
 
 
 ACTIVITIES = (
-    Activity("beach", "Beach time", "🏖️", (("dry", 24), ("warm", 18), ("uv", 12), ("gentle_wind", 10), ("shore", 8), ("sargassum", 23), ("air", 5))),
-    Activity("swim", "Swimming in the sea", "🏊", (("swim_sea", 31), ("sea_temp", 14), ("calm_wind", 10), ("dry", 8), ("sargassum", 18), ("water_quality", 14), ("air", 5)), marine=True),
-    Activity("snorkel", "Snorkeling", "🤿", (("snorkel_sea", 34), ("calm_wind", 15), ("marine_visibility", 14), ("sea_temp", 10), ("dry", 7), ("sargassum", 10), ("water_quality", 10)), marine=True),
-    Activity("dive", "Scuba diving", "🫧", (("dive_sea", 30), ("boat_wind", 15), ("marine_visibility", 18), ("sea_temp", 12), ("dry", 5), ("sargassum", 5), ("water_quality", 10), ("air", 5)), marine=True),
-    Activity("paddle", "Kayak / paddleboard", "🛶", (("paddle_sea", 34), ("calm_wind", 25), ("dry", 15), ("warm", 8), ("uv", 8), ("sargassum", 5), ("air", 5)), marine=True, strenuous=True),
-    Activity("boat", "Boat trip", "🚤", (("boat_sea", 31), ("boat_wind", 24), ("dry", 17), ("warm", 10), ("uv", 7), ("air", 6), ("sargassum", 5)), marine=True),
-    Activity("sail", "Sailing", "⛵", (("sail_wind", 36), ("sail_sea", 28), ("dry", 14), ("warm", 8), ("uv", 5), ("air", 5), ("sargassum", 4)), marine=True),
-    Activity("bvi", "BVI day charter", "🇻🇬", (("boat_sea", 31), ("boat_wind", 24), ("dry", 18), ("warm", 8), ("uv", 7), ("air", 5), ("sargassum", 7)), marine=True),
-    Activity("tennis", "Tennis", "🎾", (("dry", 34), ("exercise_heat", 25), ("tennis_wind", 20), ("uv", 16), ("air", 5)), strenuous=True),
-    Activity("hike", "National Park hike", "🥾", (("dry", 29), ("exercise_heat", 27), ("uv", 19), ("humidity", 10), ("gentle_wind", 7), ("air", 8)), strenuous=True),
-    Activity("outdoor_meal", "Long outdoor meal", "🍽️", (("dry", 32), ("warm", 23), ("gentle_wind", 16), ("humidity", 9), ("shade_uv", 8), ("air", 12))),
-    Activity("wellness", "Indoor wellness", "🧘", (("indoor_weather", 55), ("air", 15), ("indoor_heat_relief", 30)), outdoor=False),
+    Activity(
+        "beach",
+        "Beach time",
+        "🏖️",
+        (
+            ("dry", 24),
+            ("warm", 18),
+            ("uv", 12),
+            ("gentle_wind", 10),
+            ("shore", 8),
+            ("sargassum", 23),
+            ("air", 5),
+        ),
+    ),
+    Activity(
+        "swim",
+        "Swimming in the sea",
+        "🏊",
+        (
+            ("swim_sea", 31),
+            ("sea_temp", 14),
+            ("calm_wind", 10),
+            ("dry", 8),
+            ("sargassum", 18),
+            ("water_quality", 14),
+            ("air", 5),
+        ),
+        marine=True,
+    ),
+    Activity(
+        "snorkel",
+        "Snorkeling",
+        "🤿",
+        (
+            ("snorkel_sea", 34),
+            ("calm_wind", 15),
+            ("marine_visibility", 14),
+            ("sea_temp", 10),
+            ("dry", 7),
+            ("sargassum", 10),
+            ("water_quality", 10),
+        ),
+        marine=True,
+    ),
+    Activity(
+        "dive",
+        "Scuba diving",
+        "🫧",
+        (
+            ("dive_sea", 30),
+            ("boat_wind", 15),
+            ("marine_visibility", 18),
+            ("sea_temp", 12),
+            ("dry", 5),
+            ("sargassum", 5),
+            ("water_quality", 10),
+            ("air", 5),
+        ),
+        marine=True,
+    ),
+    Activity(
+        "paddle",
+        "Kayak / paddleboard",
+        "🛶",
+        (
+            ("paddle_sea", 34),
+            ("calm_wind", 25),
+            ("dry", 15),
+            ("warm", 8),
+            ("uv", 8),
+            ("sargassum", 5),
+            ("air", 5),
+        ),
+        marine=True,
+        strenuous=True,
+    ),
+    Activity(
+        "boat",
+        "Boat trip",
+        "🚤",
+        (
+            ("boat_sea", 31),
+            ("boat_wind", 24),
+            ("dry", 17),
+            ("warm", 10),
+            ("uv", 7),
+            ("air", 6),
+            ("sargassum", 5),
+        ),
+        marine=True,
+    ),
+    Activity(
+        "sail",
+        "Sailing",
+        "⛵",
+        (
+            ("sail_wind", 36),
+            ("sail_sea", 28),
+            ("dry", 14),
+            ("warm", 8),
+            ("uv", 5),
+            ("air", 5),
+            ("sargassum", 4),
+        ),
+        marine=True,
+    ),
+    Activity(
+        "bvi",
+        "BVI day charter",
+        "🇻🇬",
+        (
+            ("boat_sea", 31),
+            ("boat_wind", 24),
+            ("dry", 18),
+            ("warm", 8),
+            ("uv", 7),
+            ("air", 5),
+            ("sargassum", 7),
+        ),
+        marine=True,
+    ),
+    Activity(
+        "tennis",
+        "Tennis",
+        "🎾",
+        (("dry", 34), ("exercise_heat", 25), ("tennis_wind", 20), ("uv", 16), ("air", 5)),
+        strenuous=True,
+    ),
+    Activity(
+        "hike",
+        "National Park hike",
+        "🥾",
+        (
+            ("dry", 29),
+            ("exercise_heat", 27),
+            ("uv", 19),
+            ("humidity", 10),
+            ("gentle_wind", 7),
+            ("air", 8),
+        ),
+        strenuous=True,
+    ),
+    Activity(
+        "outdoor_meal",
+        "Long outdoor meal",
+        "🍽️",
+        (
+            ("dry", 32),
+            ("warm", 23),
+            ("gentle_wind", 16),
+            ("humidity", 9),
+            ("shade_uv", 8),
+            ("air", 12),
+        ),
+    ),
+    Activity(
+        "wellness",
+        "Indoor wellness",
+        "🧘",
+        (("indoor_weather", 55), ("air", 15), ("indoor_heat_relief", 30)),
+        outdoor=False,
+    ),
 )
 
 
@@ -162,9 +312,7 @@ def _period_metrics(
     def marine_stat(field: str, fn: Callable[[list[float]], float] = fmean) -> float | None:
         source = marine_hourly.get(field) or []
         values = [
-            float(source[i])
-            for i in marine_indices
-            if i < len(source) and source[i] is not None
+            float(source[i]) for i in marine_indices if i < len(source) and source[i] is not None
         ]
         if not values:
             current = ((marine or {}).get("current") or {}).get(field)
@@ -193,8 +341,17 @@ def _period_metrics(
         "sargassum_known": bool(sargassum.get("available") and sargassum.get("level") != "unknown"),
         "aqi": air.get("us_aqi") if air.get("available") else None,
         "beach_advisory": any(item.get("status") == "exceedance" for item in beach_items),
-        "marine_alert": any(item.get("hazard_type") in {"marine", "high_surf", "rip_current"} and item.get("level", 0) >= 2 for item in alert_items),
-        "storm_alert": any(item.get("hazard_type") in {"thunderstorm", "severe_thunderstorm", "flash_flood", "flood"} and item.get("level", 0) >= 2 for item in alert_items),
+        "marine_alert": any(
+            item.get("hazard_type") in {"marine", "high_surf", "rip_current"}
+            and item.get("level", 0) >= 2
+            for item in alert_items
+        ),
+        "storm_alert": any(
+            item.get("hazard_type")
+            in {"thunderstorm", "severe_thunderstorm", "flash_flood", "flood"}
+            and item.get("level", 0) >= 2
+            for item in alert_items
+        ),
         "marine_available": bool(marine_indices or (marine or {}).get("current")),
         "air_available": bool(air.get("available")),
     }
@@ -203,7 +360,10 @@ def _period_metrics(
 def _score_activity(activity: Activity, m: dict[str, Any]) -> dict[str, Any]:
     factors = _factors(m)
     weighted = [(key, weight, factors[key]) for key, weight in activity.factors]
-    score = round(sum(weight * value[0] for _, weight, value in weighted) / sum(weight for _, weight, _ in weighted))
+    score = round(
+        sum(weight * value[0] for _, weight, value in weighted)
+        / sum(weight for _, weight, _ in weighted)
+    )
     caps: list[tuple[int, str]] = []
     if activity.outdoor and (m["thunderstorm"] or m["storm_alert"]):
         caps.append((10 if activity.strenuous else 15, "Lightning risk: move plans indoors"))
@@ -269,13 +429,21 @@ def _factors(m: dict[str, Any]) -> dict[str, tuple[float, str]]:
     warm = _curve(temp, ((18, 30), (23, 80), (26, 100), (30, 94), (33, 65), (36, 25)), 70)
     uv_score = _curve(uv, ((0, 75), (3, 100), (6, 90), (8, 68), (10, 40), (12, 20)), 60)
     shade_uv = _curve(uv, ((0, 90), (5, 100), (8, 88), (11, 68), (13, 45)), 75)
-    humidity_score = _curve(humidity, ((40, 95), (60, 100), (70, 88), (80, 62), (90, 35), (100, 15)), 65)
+    humidity_score = _curve(
+        humidity, ((40, 95), (60, 100), (70, 88), (80, 62), (90, 35), (100, 15)), 65
+    )
     heat = _curve(feels, ((20, 70), (25, 100), (28, 92), (31, 65), (34, 30), (38, 5)), 60)
     gentle = _curve(wind, ((0, 72), (8, 100), (18, 92), (28, 60), (40, 20)), 65)
     calm = _curve(wind, ((0, 100), (10, 95), (18, 70), (28, 30), (40, 5)), 60)
     boat_wind = _curve(wind, ((0, 82), (10, 100), (20, 90), (30, 62), (40, 25), (55, 5)), 62)
-    sail_wind = _curve(wind, ((0, 20), (8, 62), (14, 94), (22, 100), (30, 78), (40, 35), (55, 5)), 58)
-    tennis_wind = _curve(max(wind or 0, (gust or 0) * 0.65) if wind is not None or gust is not None else None, ((0, 100), (12, 96), (20, 70), (28, 35), (40, 5)), 62)
+    sail_wind = _curve(
+        wind, ((0, 20), (8, 62), (14, 94), (22, 100), (30, 78), (40, 35), (55, 5)), 58
+    )
+    tennis_wind = _curve(
+        max(wind or 0, (gust or 0) * 0.65) if wind is not None or gust is not None else None,
+        ((0, 100), (12, 96), (20, 70), (28, 35), (40, 5)),
+        62,
+    )
     shore = _curve(wave, ((0, 95), (0.5, 100), (1.0, 78), (1.5, 48), (2.0, 18), (3.0, 0)), 58)
     swim = _curve(wave, ((0, 100), (0.4, 98), (0.8, 78), (1.2, 48), (1.8, 10), (2.5, 0)), 55)
     snorkel = _curve(wave, ((0, 100), (0.3, 100), (0.7, 72), (1.0, 45), (1.5, 10), (2.0, 0)), 52)
@@ -294,29 +462,103 @@ def _factors(m: dict[str, Any]) -> dict[str, tuple[float, str]]:
 
     return {
         "dry": (dry, _rain_reason(rain)),
-        "warm": (warm, _value_reason(temp, "Comfortable air temperature", "Hot air temperature", "°C", 31)),
+        "warm": (
+            warm,
+            _value_reason(temp, "Comfortable air temperature", "Hot air temperature", "°C", 31),
+        ),
         "uv": (uv_score, _value_reason(uv, "Manageable UV", "Strong midday UV", "", 7)),
-        "shade_uv": (shade_uv, _value_reason(uv, "Comfortable in shade", "Choose a shaded table", "", 8)),
-        "humidity": (humidity_score, _value_reason(humidity, "Comfortable humidity", "Muggy conditions", "%", 78)),
-        "exercise_heat": (heat, _value_reason(feels, "Comfortable for exercise", "Heat stress during exertion", "°C feels-like", 30)),
-        "gentle_wind": (gentle, _value_reason(wind, "Pleasant breeze", "Strong breeze", " km/h", 26)),
+        "shade_uv": (
+            shade_uv,
+            _value_reason(uv, "Comfortable in shade", "Choose a shaded table", "", 8),
+        ),
+        "humidity": (
+            humidity_score,
+            _value_reason(humidity, "Comfortable humidity", "Muggy conditions", "%", 78),
+        ),
+        "exercise_heat": (
+            heat,
+            _value_reason(
+                feels,
+                "Comfortable for exercise",
+                "Heat stress during exertion",
+                "°C feels-like",
+                30,
+            ),
+        ),
+        "gentle_wind": (
+            gentle,
+            _value_reason(wind, "Pleasant breeze", "Strong breeze", " km/h", 26),
+        ),
         "calm_wind": (calm, _value_reason(wind, "Light wind", "Wind-chopped water", " km/h", 18)),
-        "boat_wind": (boat_wind, _value_reason(wind, "Comfortable boat breeze", "Strong wind for small craft", " km/h", 30)),
-        "sail_wind": (sail_wind, _value_reason(wind, "Useful sailing breeze", "Sailing wind outside the ideal range", " km/h", 30)),
-        "tennis_wind": (tennis_wind, _value_reason(wind, "Light court wind", "Wind affects ball control", " km/h", 18)),
+        "boat_wind": (
+            boat_wind,
+            _value_reason(
+                wind, "Comfortable boat breeze", "Strong wind for small craft", " km/h", 30
+            ),
+        ),
+        "sail_wind": (
+            sail_wind,
+            _value_reason(
+                wind, "Useful sailing breeze", "Sailing wind outside the ideal range", " km/h", 30
+            ),
+        ),
+        "tennis_wind": (
+            tennis_wind,
+            _value_reason(wind, "Light court wind", "Wind affects ball control", " km/h", 18),
+        ),
         "shore": (shore, _wave_reason(m, "Gentle shore conditions", "Rough shore break", 1.1)),
-        "swim_sea": (swim, _wave_reason(m, "Calm swimming water", "Rough water for casual swimmers", 1.0)),
-        "snorkel_sea": (snorkel, _wave_reason(m, "Calm snorkeling water", "Waves reduce safe entries and clarity", 0.8)),
-        "dive_sea": (dive, _wave_reason(m, "Good dive sea state", "Rough dive-boat conditions", 1.7)),
-        "paddle_sea": (paddle, _wave_reason(m, "Smooth paddling water", "Difficult paddling sea state", 0.8)),
+        "swim_sea": (
+            swim,
+            _wave_reason(m, "Calm swimming water", "Rough water for casual swimmers", 1.0),
+        ),
+        "snorkel_sea": (
+            snorkel,
+            _wave_reason(m, "Calm snorkeling water", "Waves reduce safe entries and clarity", 0.8),
+        ),
+        "dive_sea": (
+            dive,
+            _wave_reason(m, "Good dive sea state", "Rough dive-boat conditions", 1.7),
+        ),
+        "paddle_sea": (
+            paddle,
+            _wave_reason(m, "Smooth paddling water", "Difficult paddling sea state", 0.8),
+        ),
         "boat_sea": (boat, _wave_reason(m, "Comfortable passage", "Choppy boat passage", 1.5)),
-        "sail_sea": (sail_sea, _wave_reason(m, "Useful sailing sea state", "Rough sailing sea state", 1.8)),
-        "marine_visibility": (marine_visibility, "Water clarity inferred from waves and atmospheric visibility"),
-        "sea_temp": (sea, _value_reason(sea_temp, "Comfortable sea temperature", "Less comfortable sea temperature", "°C", 31)),
+        "sail_sea": (
+            sail_sea,
+            _wave_reason(m, "Useful sailing sea state", "Rough sailing sea state", 1.8),
+        ),
+        "marine_visibility": (
+            marine_visibility,
+            "Water clarity inferred from waves and atmospheric visibility",
+        ),
+        "sea_temp": (
+            sea,
+            _value_reason(
+                sea_temp,
+                "Comfortable sea temperature",
+                "Less comfortable sea temperature",
+                "°C",
+                31,
+            ),
+        ),
         "air": (air_score, _value_reason(aqi, "Clean air", "Reduced air quality", " AQI", 100)),
-        "sargassum": (sarg_score, "Low Sargassum signal" if sarg == "low" else f"{(sarg or 'Unknown').title()} Sargassum signal"),
-        "water_quality": (water_score, "No monitored beach advisory" if water_score > 50 else "A monitored beach has a water advisory"),
-        "indoor_weather": (min(100, indoor_weather), "Indoor plans gain value if showers disrupt outdoor time"),
+        "sargassum": (
+            sarg_score,
+            "Low Sargassum signal"
+            if sarg == "low"
+            else f"{(sarg or 'Unknown').title()} Sargassum signal",
+        ),
+        "water_quality": (
+            water_score,
+            "No monitored beach advisory"
+            if water_score > 50
+            else "A monitored beach has a water advisory",
+        ),
+        "indoor_weather": (
+            min(100, indoor_weather),
+            "Indoor plans gain value if showers disrupt outdoor time",
+        ),
         "indoor_heat_relief": (indoor_heat, "Air-conditioned recovery from heat and humidity"),
     }
 
@@ -349,7 +591,9 @@ def _conditions_summary(m: dict[str, Any]) -> str:
 
 
 def _confidence(m: dict[str, Any]) -> str:
-    present = sum(m.get(key) is not None for key in ("temp", "rain_probability", "wind", "uv", "wave", "aqi"))
+    present = sum(
+        m.get(key) is not None for key in ("temp", "rain_probability", "wind", "uv", "wave", "aqi")
+    )
     return "high" if present >= 5 and m["sargassum_known"] else "medium" if present >= 4 else "low"
 
 
@@ -361,7 +605,9 @@ def _safety_note(m: dict[str, Any]) -> str | None:
     if m["beach_advisory"]:
         return "Water quality varies by beach; avoid swimming at locations marked Advisory."
     if (m.get("uv") or 0) >= 8:
-        return "Very high UV: favor early hours, shade, reef-safe SPF 30+, and frequent water breaks."
+        return (
+            "Very high UV: favor early hours, shade, reef-safe SPF 30+, and frequent water breaks."
+        )
     return None
 
 
@@ -380,7 +626,11 @@ def _rating(score: int) -> str:
 def _rain_reason(value: float | None) -> str:
     if value is None:
         return "Rain confidence unavailable"
-    return f"Low rain chance ({round(value)}%)" if value < 35 else f"Showers possible ({round(value)}%)"
+    return (
+        f"Low rain chance ({round(value)}%)"
+        if value < 35
+        else f"Showers possible ({round(value)}%)"
+    )
 
 
 def _value_reason(value: float | None, good: str, bad: str, suffix: str, threshold: float) -> str:
